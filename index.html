@@ -72,6 +72,8 @@ table.ex input.ans{min-width:90px;width:100%;min-height:40px;font-size:15px;padd
 .btn.soft{background:linear-gradient(180deg,#f8f5ff,var(--lav));border-color:#d9cff2;color:#4b3d8f}
 .btn.good{background:linear-gradient(180deg,#2d8a7d,var(--c3A));color:#fff;border-color:#1b5f55;box-shadow:0 6px 18px #23776c40}
 .btn:disabled{opacity:.45;cursor:default;box-shadow:none}
+.calc{display:none;font-size:13px;font-weight:800;color:var(--mint-ink);background:var(--mint);border-radius:999px;padding:3px 10px;margin-left:6px}.calc.on{display:inline-block}
+.switch{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-weight:800;font-size:13.5px;background:#fff;border:1px solid var(--line2);border-radius:999px;padding:6px 12px 6px 8px;box-shadow:var(--shadow);user-select:none}.switch i{width:34px;height:20px;border-radius:999px;background:#cfd4e3;position:relative;transition:.15s;flex:none}.switch i:after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:.15s;box-shadow:0 1px 3px #0003}.switch.on i{background:var(--c3A)}.switch.on i:after{left:16px}
 .weq{display:inline-flex;flex-direction:column;align-items:center;gap:2px;margin:2px 4px;vertical-align:middle}.weq input.co{width:52px;min-width:52px}.weq input.fo{width:120px;min-width:120px;font-size:16px;font-family:var(--font)}.weq small{font-size:11.5px;font-family:var(--font);color:var(--faint);max-width:130px;line-height:1.15}.weqrow b{margin:0 2px;vertical-align:middle}
 .fb{margin-top:10px;border-radius:12px;padding:10px 12px;font-size:15px}
 .fb.ok{background:var(--mint);color:var(--mint-ink)}.fb.bad{background:var(--rose);color:var(--rose-ink)}.fb.part{background:var(--amber);color:var(--amber-ink)}.fb.hint{background:var(--sky);color:#2a5a7a}
@@ -136,9 +138,10 @@ details.ref summary::-webkit-details-marker{display:none}details.ref .body{paddi
   <div class="tb-brand"><span class="logo" id="logoSlot"></span><span>Exam Retake Prep</span></div>
   <span class="chip">CHEM 3A</span><span class="chip priv">Private • for Dr. Dan's students</span>
   <span class="spacer"></span>
+  <label class="switch" id="smartSw" title="Formulas get subscripts as you type (H2O → H₂O), ^ and E make superscripts (1.5E4 → 1.5×10⁴), * becomes ×, and typed math shows its value."><i></i><span>Smart typing</span></label>
   <span class="pill" id="jChip">Level 1 • 0 XP</span>
  </div>
- <p class="lead"><b>Pick the exam you're retaking.</b> <b>Mock Exam</b> = a full practice test in the real format, new numbers every time. <b>Train</b> = one topic at a time with hints. Show your work on paper like the real exam.</p>
+ <p class="lead"><b>Pick the exam you're retaking.</b> <b>Mock Exam</b> = a full practice test in the real format, new numbers every time. <b>Train</b> = one topic at a time with hints. Show your work on paper like the real exam. <b>Smart typing</b> formats as you go: H2O → H₂O, SO4^2- → SO₄²⁻, 1.5E4 → 1.5×10⁴.</p>
 
  <div class="row">
   <div class="seg exam" id="examSeg"><button data-e="1">Exam 1 • Ch 1–4</button><button data-e="2">Exam 2 • Ch 4–7, 10</button></div>
@@ -204,13 +207,16 @@ const UNSUB={};Object.entries(SUB).forEach(([k,v])=>UNSUB[v]=k);Object.entries(S
 const fml=s=>s.replace(/(\d+)/g,'<sub>$1</sub>'); // "Al2(SO4)3" -> html
 const chg=c=>c===0?'':(Math.abs(c)===1?'':Math.abs(c))+(c>0?'+':'−');
 /* significant figures of a typed number string */
-function sigFigs(s){s=String(s).trim().replace(/,/g,'').replace(/[×x]\s*10\^?/i,'e').replace(/\s+/g,'');let m=s.match(/^(-?)(\d*\.?\d*)(?:e([+-]?\d+))?$/i);if(!m)return null;let d=m[2];if(!d||d==='.')return null;const hasDot=d.includes('.');d=d.replace('.','');d=d.replace(/^0+/,'');if(!d)return 1;if(!hasDot)d=d.replace(/0+$/,'');return d.length}
-function numVal(s){s=String(s).trim().replace(/,/g,'').replace(/−/g,'-').replace(/\s*[×x]\s*10\s*\^?\s*/i,'e').replace(/\s+/g,'');s=s.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]/g,c=>UNSUB[c]);if(/^-?\d*\.?\d*(e[+-]?\d+)?$/i.test(s)&&/\d/.test(s))return parseFloat(s);const m=s.match(/^(-?[\d.]+)e([+-]?\d+)$/i);return m?parseFloat(m[1])*Math.pow(10,+m[2]):NaN}
+function sigFigs(s){s=String(s).trim().replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]/g,c=>UNSUB[c]).replace(/,/g,'').replace(/[×x]\s*10\^?/i,'e').replace(/\s+/g,'');let m=s.match(/^(-?)(\d*\.?\d*)(?:e([+-]?\d+))?$/i);if(!m)return null;let d=m[2];if(!d||d==='.')return null;const hasDot=d.includes('.');d=d.replace('.','');d=d.replace(/^0+/,'');if(!d)return 1;if(!hasDot)d=d.replace(/0+$/,'');return d.length}
+/* evaluate a simple arithmetic expression safely: digits, . e E ^ * × / + - ( ) */
+function evalExpr(s){s=String(s).replace(/×\s*10\s*\^?\s*([⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+)/g,(m,e)=>'e'+e.replace(/./g,c=>UNSUB[c])).replace(/([⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+)/g,(m,e)=>'^'+e.replace(/./g,c=>UNSUB[c])).replace(/×\s*10\s*\^?/g,'e').replace(/×/g,'*').replace(/÷/g,'/').replace(/−/g,'-').replace(/\s+/g,'');if(!/^[\d.eE^*\/+\-()]+$/.test(s)||!/[\d]/.test(s))return NaN;if(!/[*\/^+\-()]/.test(s.replace(/e[+-]?\d+/gi,'')))return NaN;try{const v=Function('"use strict";return ('+s.replace(/\^/g,'**').replace(/(\d)e([+-]?\d+)/gi,'$1e$2')+')')();return typeof v==='number'&&isFinite(v)?v:NaN}catch(e){return NaN}}
+window.isExpr=s=>!isNaN(evalExpr(s));
+function numVal(s){s=String(s).trim().replace(/,/g,'').replace(/−/g,'-').replace(/\s*[×x]\s*10\s*\^?\s*([⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻]+)/i,(m,e)=>'e'+e.replace(/./g,c=>UNSUB[c])).replace(/\s*[×x]\s*10\s*\^?\s*/i,'e').replace(/\s+/g,'');if(/[⁰¹²³⁴⁵⁶⁷⁸⁹]/.test(s))return NaN;s=s.replace(/[⁺⁻]/g,c=>UNSUB[c]);if(/^-?\d*\.?\d*(e[+-]?\d+)?$/i.test(s)&&/\d/.test(s))return parseFloat(s);const m=s.match(/^(-?[\d.]+)e([+-]?\d+)$/i);return m?parseFloat(m[1])*Math.pow(10,+m[2]):NaN}
 function stripUnit(s){return String(s).replace(/[a-zA-Zµ°%\/]+\s*$/,'').trim()}
 const fmt=(v,sf)=>{if(sf==null)return String(v);let s=Number(v).toPrecision(sf);if(/e/i.test(s)){const [m,e]=s.split(/e/i);return m+' × 10'+String(+e).split('').map(c=>SUP[c]||c).join('')}return s};
 const sciHTML=(m,e)=>`${m} × 10<sup>${e}</sup>`;
 /* numeric grading: value within tol (fraction) and optional sig fig check. returns {score 0..1, slip} */
-function gradeNum(input,ans,{tol=.006,sf=null,alts=[]}={}){const raw=String(input||'').trim();if(!raw)return{score:0,slip:'blank'};const v=numVal(stripUnit(raw));if(isNaN(v))return{score:0,slip:'format'};
+function gradeNum(input,ans,{tol=.006,sf=null,alts=[]}={}){const raw=String(input||'').trim();if(!raw)return{score:0,slip:'blank'};let v=numVal(stripUnit(raw));if(isNaN(v)){const ev=evalExpr(stripUnit(raw));if(isNaN(ev))return{score:0,slip:'format'};const close=Math.abs(ev-ans)<=Math.max(Math.abs(ans)*tol,1e-12);return close?{score:sf?.5:1,slip:sf?'expr':''}:{score:0,slip:'wrong'}}
  const close=(a,b)=>Math.abs(a-b)<=Math.max(Math.abs(b)*tol,1e-12);
  if(close(v,ans)){if(sf!=null){const got=sigFigs(stripUnit(raw));if(got!==null&&got!==sf)return{score:.5,slip:'sigfigs',got}}return{score:1}}
  for(const a of alts)if(close(v,a.v))return{score:a.credit||0,slip:a.slip};
@@ -219,7 +225,7 @@ function gradeNum(input,ans,{tol=.006,sf=null,alts=[]}={}){const raw=String(inpu
  const r=v/ans;if(r>0&&Math.abs(Math.log10(r)-Math.round(Math.log10(r)))<.02&&Math.round(Math.log10(r))!==0)return{score:0,slip:'power10'};
  if(Math.abs(v-ans)<=Math.abs(ans)*.05)return{score:.5,slip:'close'};
  return{score:0,slip:'wrong'}}
-const SLIPTXT={blank:'No answer given.',format:'I couldn\'t read that as a number. Type like 1.49E4 or 14900.',sigfigs:'Right value, wrong number of significant figures.',x1000:'Off by a factor of 1000 (check the metric prefix: kilo = 1000, milli = 1/1000).',inverted:'That\'s the reciprocal. Check which quantity goes on top.',power10:'Off by a power of ten. Check the exponent or the decimal point.',close:'Close, but rounding drifted. Keep extra digits until the final step.',wrong:'Not it.',multiple:'Balanced, but not the smallest whole-number coefficients.',unbalanced:'The equation is not balanced yet.',doses:'Forgot to split the daily total into doses.',lbkg:'Forgot to convert pounds to kilograms.',choice:'Not the right choice.'};
+const SLIPTXT={expr:'The math is right, but type your final rounded answer (correct sig figs), not the expression.',blank:'No answer given.',format:'I couldn\'t read that as a number. Type like 1.49E4 or 14900.',sigfigs:'Right value, wrong number of significant figures.',x1000:'Off by a factor of 1000 (check the metric prefix: kilo = 1000, milli = 1/1000).',inverted:'That\'s the reciprocal. Check which quantity goes on top.',power10:'Off by a power of ten. Check the exponent or the decimal point.',close:'Close, but rounding drifted. Keep extra digits until the final step.',wrong:'Not it.',multiple:'Balanced, but not the smallest whole-number coefficients.',unbalanced:'The equation is not balanced yet.',doses:'Forgot to split the daily total into doses.',lbkg:'Forgot to convert pounds to kilograms.',choice:'Not the right choice.'};
 function gradeText(input,answers){const n=s=>String(s).toLowerCase().replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹₀₁₂₃₄₅₆₇₈₉⁺⁻]/g,c=>UNSUB[c]).replace(/[\s\-–_.,'’()]/g,'').replace(/−/g,'-');const v=n(input);if(!v)return{score:0,slip:'blank'};return{score:answers.some(a=>n(a)===v)?1:0,slip:'wrong'}}
 /* electron configuration normalization */
 const ORDER=['1s','2s','2p','3s','3p','4s','3d','4p','5s','4d','5p','6s','4f','5d','6p'],CAP={s:2,p:6,d:10,f:14};
@@ -501,13 +507,31 @@ function bankToQ(b,ex){const sec=bankSec(ex,b);let part;
 /* try to top up from the live bank (adds variety; the snapshot keeps it working offline) */
 (function liveBank(){function go(){if(!window.QB)return;const ids=new Set(BANKQ.map(q=>q.id));QB.get({course:'3A',chapters:['3A-1','3A-2','3A-3','3A-4','3A-5','3A-6','3A-7','3A-10'],types:['mc','number','text']}).then(items=>{let n=0;(items||[]).forEach(q=>{if(ids.has(q.id)||!q.chapters)return;if(q.skill.startsWith('elements.')||/^metric\.(prefix|symbol|scientific|standard)/.test(q.skill))return;if(q.type==='number'&&typeof q.answer!=='number')return;const ch=q.chapters.find(c=>/^3A-(1|2|3|4|5|6|7|10)$/.test(c));if(!ch)return;BANKQ.push({id:q.id,sk:q.skill,ch,t:q.type,p:q.prompt,a:q.answer,c:q.choices,acc:q.accept,u:q.unit,tol:q.tolerance,sf:q.sigfigs,cs:q.caseSensitive,h:q.hint,e:q.explain});n++});if(n)console.log('question bank: +'+n+' live questions')}).catch(()=>{})}
  if(window.QB)go();else{const sc=document.createElement('script');sc.src='https://itsdrdan.github.io/questionbank/qb.js';sc.onload=go;document.head.appendChild(sc)}})();
+/* ======================= smart typing (live sub/superscripts) ======================= */
+const SUBC=d=>d.replace(/\d/g,c=>SUB[c]),SUPC=d=>d.replace(/[0-9+\-]/g,c=>SUP[c]||c);
+function toPlain(t){return String(t).replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻₀₁₂₃₄₅₆₇₈₉]/g,c=>UNSUB[c]).replace(/\s*×\s*10\s*\^?/g,'E').replace(/×/g,'*').replace(/−/g,'-')}
+/* mode: 'formula' | 'cfg' | 'num' */
+function smartFormat(mode,raw){let t=toPlain(raw);
+ if(mode==='formula'){t=t.replace(/\^([0-9]*[+\-])/g,(m,g)=>SUPC(g));t=t.replace(/([A-Za-z\)\]])(\d+)/g,(m,a,d)=>a+SUBC(d));t=t.replace(/([₀-₉A-Za-z\)\]])([+\-])(?=\s|$|\)|,)/g,(m,a,c)=>a+SUP[c]);return t}
+ if(mode==='cfg'){t=t.replace(/\^(\d+)/g,(m,d)=>SUPC(d));t=t.replace(/([spdf])(\d+)/gi,(m,a,d)=>a+SUPC(d));return t}
+ if(mode==='num'){t=t.replace(/(\d)\s*[eE]\s*([+\-]?\d+)/g,(m,a,e)=>a+'×10'+SUPC(e));t=t.replace(/\^([+\-]?\d+)/g,(m,e)=>SUPC(e));t=t.replace(/\*/g,'×');return t}
+ return t}
+let SMART=LS.get('-smart',true);
+function wireSmart(el,mode){if(!el||el.dataset.smart)return;el.dataset.smart=mode;
+ const run=()=>{if(!SMART)return;const raw=el.value,atEnd=el.selectionStart===raw.length;const out=smartFormat(mode,raw);if(out!==raw){const pos=el.selectionStart;el.value=out;try{el.setSelectionRange(atEnd?out.length:Math.min(pos+(out.length-raw.length),out.length),atEnd?out.length:Math.min(pos+(out.length-raw.length),out.length))}catch(e){}}
+  if(mode==='num'){let chip=el.nextElementSibling;if(!chip||!chip.classList.contains('calc')){chip=document.createElement('span');chip.className='calc';el.after(chip)}const ev=evalExpr(stripUnit(el.value));chip.textContent=isNaN(ev)?'':'= '+(Math.abs(ev)>=1e5||Math.abs(ev)<1e-3?ev.toExponential(4):+ev.toPrecision(6));chip.classList.toggle('on',!isNaN(ev))}};
+ el.addEventListener('input',run)}
+function wireSmartAll(root){(root||document).querySelectorAll('input.ans').forEach(el=>{const id=el.id||'';const p=window._partById&&_partById[id.replace(/-[cf]\d+$/,'')];let mode=null;
+  if(el.classList.contains('fo'))mode='formula';else if(el.classList.contains('co'))mode=null;else if(p){if(p.kind==='formula'||(p.kind==='text'&&(p.cs||p.sym)))mode='formula';else if(p.kind==='cfg')mode='cfg';else if(p.kind==='num'||p.kind==='meas')mode='num'}
+  if(mode)wireSmart(el,mode)})}
+window._partById={};
 /* ======================= rendering ======================= */
 let uid=0;
-function renderPart(p,qid,idx){const id=`${qid}-${idx}`;p.id=id;const lab=p.label?`<label for="${id}">${p.label}</label>`:'';
- if(p.kind==='num'||p.kind==='meas')return `<div class="part">${lab}<input class="ans${p.short?'':' '}${p.wide?' wide':''}" id="${id}" inputmode="decimal" autocomplete="off" placeholder="${p.kind==='meas'?'value + unit':(p.sf?'answer':'answer')}" ${p.short?'style="min-width:90px;max-width:120px"':''}></div>`;
+function renderPart(p,qid,idx){const id=`${qid}-${idx}`;p.id=id;_partById[id]=p;const lab=p.label?`<label for="${id}">${p.label}</label>`:'';
+ if(p.kind==='num'||p.kind==='meas')return `<div class="part">${lab}<input class="ans${p.short?'':' '}${p.wide?' wide':''}" id="${id}" inputmode="decimal" autocomplete="off" placeholder="${p.kind==='meas'?'value + unit':'answer'}" ${p.short?'style="min-width:90px;max-width:120px"':''}></div>`;
  if(p.kind==='text')return `<div class="part">${lab}<input class="ans wide" id="${id}" autocomplete="off" autocapitalize="off" placeholder="${p.ph||''}"></div>`;
- if(p.kind==='formula')return `<div class="part">${lab}<input class="ans" id="${id}" autocomplete="off" autocapitalize="off" placeholder="e.g. Al2(SO4)3"></div>`;
- if(p.kind==='cfg')return `<div class="part">${lab}<input class="ans wide" id="${id}" autocomplete="off" autocapitalize="off" placeholder="${p.ion?'e.g. [Ne] 3s2':'e.g. 1s2 2s2 2p6'}"></div>`;
+ if(p.kind==='formula')return `<div class="part">${lab}<input class="ans" id="${id}" autocomplete="off" autocapitalize="off" placeholder="e.g. Al₂(SO₄)₃"></div>`;
+ if(p.kind==='cfg')return `<div class="part">${lab}<input class="ans wide" id="${id}" autocomplete="off" autocapitalize="off" placeholder="${p.ion?'e.g. [Ne] 3s² 3p⁶':'e.g. 1s² 2s² 2p⁶'}"></div>`;
  if(p.kind==='sel')return `<div class="part${p.block?'" style="display:block':''}">${p.label?`<label for="${id}">${p.label}</label>`:''}<select class="ans" id="${id}"><option value="">— choose —</option>${p.opts.map(o=>`<option value="${esc(o)}">${p.html?fml(o):esc(o)}</option>`).join('')}</select></div>`;
  if(p.kind==='mc')return `<div class="mc" id="${id}" ${p.inline?'style="grid-template-columns:repeat(auto-fit,minmax(90px,1fr))"':''}>${p.opts.map((o,i)=>`<label><input type="radio" name="${id}" value="${i}"><span>${String.fromCharCode(97+i)}) ${o}</span></label>`).join('')}</div>`;
  if(p.kind==='orbital'){const subs=config(p.z);return `<div class="orb" id="${id}">${subs.map(([o])=>`<div class="sub"><div class="boxes">${Array.from({length:CAP[o[1]]/2},()=>`<div class="obox" data-sub="${o}" tabindex="0" role="button" aria-label="${o} orbital box"></div>`).join('')}</div><small>${o}</small></div>`).join('')}</div>`}
@@ -521,7 +545,7 @@ function renderQ(q,n,qid){q.qid=qid;let body='';q.allParts=[];
  else if(q.table){body=`<div style="overflow:auto"><table class="ex"><tr>${q.table.head.map(h=>`<th>${h}</th>`).join('')}</tr>${q.table.rows.map(row=>`<tr>${row.map(c=>{if(c.kind==='given')return `<td>${c.html||esc(c.text)}</td>`;q.allParts.push(c);return `<td>${renderPart(c,qid,q.allParts.length-1).replace(/<label[^>]*><\/label>/,'')}</td>`}).join('')}</tr>`).join('')}</table></div>`}
  else{if(q.pd)body+=`<div class="pd">${q.pd.map((svg,i)=>`<div class="box">${svg}<div><b>${String.fromCharCode(65+i)}</b></div></div>`).join('')}</div>`;body+=`<div class="parts">${addParts(q.parts)}</div>`}
  return `<div class="q" id="${qid}"><div class="qh"><b>${n===''?(q.bank?'From the study hub bank · '+esc(q.from):q.extra?'Study-guide extra':'Practice question'):'Question #'+n}${q.tag?`<span class="tag ${q.tag==='Lab'?'lab':''}">${q.tag} question</span>`:''}</b><span class="pts">${q.pts} pts</span></div><div class="prompt">${q.prompt}</div>${q.work?'<div class="work">You must show your work on paper to be eligible for credit.</div>':''}${body}<div class="fbwrap"></div></div>`}
-function wireInteractive(q){q.allParts.forEach(p=>{const el=$(p.id);if(!el)return;
+function wireInteractive(q){wireSmartAll($(q.qid));q.allParts.forEach(p=>{const el=$(p.id);if(!el)return;
  if(p.kind==='mc')el.querySelectorAll('input').forEach(r=>r.addEventListener('change',()=>{el.querySelectorAll('label').forEach(l=>l.classList.remove('pick'));r.closest('label').classList.add('pick');updateStatus()}));
  else if(p.kind==='orbital')el.querySelectorAll('.obox').forEach(b=>{const cyc=()=>{b.textContent=b.textContent===''?'↑':b.textContent==='↑'?'↑↓':'';updateStatus()};b.onclick=cyc;b.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();cyc()}}});
  else if(p.kind==='dots')el.querySelectorAll('.d').forEach(d=>{const t=()=>{d.classList.toggle('on');updateStatus()};d.onclick=t;d.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();t()}}});
@@ -647,6 +671,8 @@ window.selfTest=function(n=40){const fails=[];const host=document.createElement(
   const saveTrack=window.ddTrack;window.ddTrack=null;const res=gradeQ(q);window.ddTrack=saveTrack;if(res.earned<q.pts)fails.push([kind==='gen'?t:'bank:'+t.sk+':'+t.id,res.earned+'/'+q.pts,res.msgs.join(' | '),q.prompt.replace(/<[^>]+>/g,'').slice(0,90),kind==='bank'?JSON.stringify(t.a)+' '+(t.sf||'')+' '+(t.tol||''):''])}
  host.remove();REC=LS.get('-rec',{});console.log(fails.length?fails:'all generators pass');return fails};
 
+/* ---- smart toggle ---- */
+$('smartSw').classList.toggle('on',SMART);$('smartSw').onclick=()=>{SMART=!SMART;LS.set('-smart',SMART);$('smartSw').classList.toggle('on',SMART);toast(SMART?'Smart typing on: H2O → H₂O, 1.5E4 → 1.5×10⁴':'Smart typing off')};
 /* ---- boot ---- */
 document.querySelectorAll('[data-ic]').forEach(e=>e.outerHTML=ic(e.dataset.ic));$('logoSlot').innerHTML=ic('logo');
 buildModes();renderJ();show();
