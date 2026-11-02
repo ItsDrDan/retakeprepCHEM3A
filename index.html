@@ -11,7 +11,8 @@ button,input,select{font:inherit;color:inherit}
 .app{max-width:1100px;margin:0 auto;padding:12px 12px 48px}
 .tb{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow);padding:12px 16px}
 .tb-brand{font-family:var(--font-display);font-weight:600;font-size:clamp(22px,3.6vw,30px);display:flex;align-items:center;gap:10px}
-.tb-brand .logo{width:46px;height:46px;border-radius:14px;background:linear-gradient(135deg,#ffd6a5,#ffadad 55%,#bdb2ff);display:grid;place-items:center;color:#fff;font-size:26px;flex:none}
+.tb-brand .logo{width:50px;height:50px;border-radius:14px;background:linear-gradient(135deg,#e3fbf4,#f1ecff);display:grid;place-items:center;flex:none;box-shadow:inset 0 -3px 0 #0001}.tb-brand .logo svg{width:40px;height:40px}
+.ic-svg{width:1.25em;height:1.25em;vertical-align:-.3em;flex:none}.btn .ic-svg{width:26px;height:26px;background:#fff;border-radius:8px;padding:2px;box-sizing:border-box}.mode .ic .ic-svg{width:42px;height:42px}.ach-panel summary .ic-svg{width:28px;height:28px;margin-right:8px}
 .chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:5px 12px;font-weight:800;font-size:13px;background:var(--c3A-bg);color:var(--c3A);border:1px solid #bfe0d2}
 .chip.priv{background:var(--amber);color:var(--amber-ink);border-color:var(--amber-line)}
 .lead{margin:6px 0 0;color:var(--muted);font-size:15px}
@@ -26,7 +27,7 @@ button,input,select{font:inherit;color:inherit}
 .mode{text-align:left;cursor:pointer;background:var(--surface);border:2px solid var(--line2);border-bottom-width:5px;border-radius:18px;padding:12px 14px;display:grid;grid-template-columns:56px 1fr;gap:2px 14px;align-items:center;min-height:78px;transition:transform .12s,box-shadow .12s;box-shadow:var(--shadow)}
 .mode:hover{transform:translateY(-2px)}.mode.on{border-color:var(--accent);background:var(--accent-soft)}
 .mode .ic{grid-row:span 2;width:56px;height:56px;border-radius:16px;display:grid;place-items:center;font-size:26px;box-shadow:inset 0 -3px 0 #0001}
-.mode[data-m="mock"] .ic{background:linear-gradient(135deg,#ffe3d6,#ffc9b3)}.mode[data-m="train"] .ic{background:linear-gradient(135deg,#dff3ea,#b9e6d3)}.mode[data-m="weak"] .ic{background:linear-gradient(135deg,#f2e8fb,#dccbf4)}
+.mode[data-m="mock"] .ic{background:linear-gradient(135deg,#eaf6ff,#d4ecff)}.mode[data-m="train"] .ic{background:linear-gradient(135deg,#e2f7fb,#c9eef6)}.mode[data-m="weak"] .ic{background:linear-gradient(135deg,#ffeaf1,#ffd6e3)}
 .mode.on{box-shadow:0 8px 22px #4b57d122}
 .mode b{font-size:17px;font-family:var(--font-display);font-weight:600}.mode small{color:var(--muted);font-size:13px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow);padding:16px;margin-top:12px}
@@ -132,7 +133,7 @@ details.ref summary::-webkit-details-marker{display:none}details.ref .body{paddi
 <body>
 <div class="app">
  <div class="tb">
-  <div class="tb-brand"><span class="logo">🔁</span><span>Exam Retake Prep</span></div>
+  <div class="tb-brand"><span class="logo" id="logoSlot"></span><span>Exam Retake Prep</span></div>
   <span class="chip">CHEM 3A</span><span class="chip priv">Private • for Dr. Dan's students</span>
   <span class="spacer"></span>
   <span class="pill" id="jChip">Level 1 • 0 XP</span>
@@ -151,11 +152,11 @@ details.ref summary::-webkit-details-marker{display:none}details.ref .body{paddi
   <div class="topics" id="topics"></div>
   <div id="trainQ"></div>
   <div class="row">
-   <button class="btn warm" id="bHint">💡 Hint</button>
-   <button class="btn primary" id="bCheck">✓ Check answer</button>
-   <button class="btn soft" id="bShow">📖 Show solution</button>
-   <button class="btn good hidden" id="bNext">Next question ▸</button>
-   <button class="btn" id="bSkip">Skip</button>
+   <button class="btn warm" id="bHint"><i data-ic="hint"></i>Hint</button>
+   <button class="btn primary" id="bCheck"><i data-ic="check"></i>Check answer</button>
+   <button class="btn soft" id="bShow"><i data-ic="solution"></i>Show solution</button>
+   <button class="btn good hidden" id="bNext"><i data-ic="next"></i>Next question</button>
+   <button class="btn" id="bSkip"><i data-ic="skip"></i>Skip</button>
   </div>
  </section>
 
@@ -165,7 +166,7 @@ details.ref summary::-webkit-details-marker{display:none}details.ref .body{paddi
   <p class="work" style="font-style:normal;color:var(--muted)">Same sections, question count and point values as the real exam. Work every problem on paper, type the final answers here, then press <b>Grade my exam</b> at the bottom. A periodic table and your yellow/green sheets are allowed.</p>
   <div class="jump" id="jump"></div>
   <div id="mockBody"></div>
-  <div class="sticky"><span id="mockStatus">0 of 0 answered</span><div><button class="btn" id="bNewMock">🔄 New exam</button> <button class="btn primary" id="bGrade">🎓 Grade my exam</button></div></div>
+  <div class="sticky"><span id="mockStatus">0 of 0 answered</span><div><button class="btn" id="bNewMock"><i data-ic="new-exam"></i>New exam</button> <button class="btn primary" id="bGrade"><i data-ic="grade"></i>Grade my exam</button></div></div>
   <div id="result" class="hidden"></div>
  </section>
 
@@ -176,7 +177,7 @@ details.ref summary::-webkit-details-marker{display:none}details.ref .body{paddi
   <div id="weakList"></div>
  </section>
 
- <details class="ref ach-panel"><summary><span><span class="simg"><img src="https://itsdrdan.github.io/games/brand/badges/trophy.webp" alt="" onerror="this.replaceWith(document.createTextNode('🏆'))"></span>Achievements <small id="achCount" style="font-weight:600;color:var(--faint)"></small></span><span>▾</span></summary><div class="body">
+ <details class="ref ach-panel"><summary><span><i data-ic="trophy"></i>Achievements <small id="achCount" style="font-weight:600;color:var(--faint)"></small></span><span>▾</span></summary><div class="body">
   <div class="xp"><b id="lvl">Level 1</b><div class="xpbar"><i id="xpFill" style="width:0"></i></div><span id="xpTxt">0 / 100 XP</span></div>
   <div class="achgrid" id="badges"></div>
   <p style="margin:10px 0 0"><button class="btn" id="bReset" style="min-height:40px;font-size:14px">Reset my progress on this device</button></p>
@@ -187,6 +188,9 @@ details.ref summary::-webkit-details-marker{display:none}details.ref .body{paddi
 <div class="toast" id="toast"></div>
 
 <script>
+/* ======================= icon set (SVG by ItsDrDan/ChatGPT) ======================= */
+const ICONS={"solution": "<svg class=\"ic-svg\" aria-hidden=\"true\" focusable=\"false\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 52 52\"><path d=\"M5 26q20-23 42 0Q27 49 5 26Z\" fill=\"#d9cafa\" stroke=\"#102f58\" stroke-width=\"3\"/><circle cx=\"26\" cy=\"26\" r=\"8\" fill=\"#8b67d7\" stroke=\"#102f58\" stroke-width=\"2.5\"/><circle cx=\"26\" cy=\"26\" r=\"3\" fill=\"#fff\"/></svg>", "next": "<svg class=\"ic-svg\" aria-hidden=\"true\" focusable=\"false\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 52 52\"><rect x=\"5\" y=\"9\" width=\"42\" height=\"34\" rx=\"14\" fill=\"#a7e9d8\" stroke=\"#102f58\" stroke-width=\"3\"/><path d=\"m22 18 10 8-10 8\" fill=\"none\" stroke=\"#0c786d\" stroke-width=\"5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>", "check": "<svg class=\"ic-svg\" aria-hidden=\"true\" focusable=\"false\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 52 52\"><circle cx=\"26\" cy=\"26\" r=\"20\" fill=\"#a4ead6\" stroke=\"#102f58\" stroke-width=\"3\"/><path d=\"m15 26 8 8 15-17\" fill=\"none\" stroke=\"#078b76\" stroke-width=\"5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>", "weak-spots": "<svg class=\"ic-svg\" aria-hidden=\"true\" focusable=\"false\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 52 52\"><circle cx=\"26\" cy=\"26\" r=\"19\" fill=\"#ffd1e0\" stroke=\"#102f58\" stroke-width=\"3\"/><circle cx=\"26\" cy=\"26\" r=\"12\" fill=\"#ff759b\" stroke=\"#102f58\" stroke-width=\"2.5\"/><circle cx=\"26\" cy=\"26\" r=\"5\" fill=\"#fff\" stroke=\"#102f58\" stroke-width=\"2\"/><path d=\"M27 25 43 8m-5 1 8-5-2 8\" stroke=\"#102f58\" stroke-width=\"3.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>", "train": "<svg class=\"ic-svg\" aria-hidden=\"true\" focusable=\"false\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 52 52\"><rect x=\"5\" y=\"18\" width=\"9\" height=\"17\" rx=\"3\" fill=\"#74d9ef\" stroke=\"#102f58\" stroke-width=\"3\"/><rect x=\"14\" y=\"23\" width=\"24\" height=\"7\" rx=\"3\" fill=\"#2296ba\" stroke=\"#102f58\" stroke-width=\"3\"/><rect x=\"38\" y=\"18\" width=\"9\" height=\"17\" rx=\"3\" fill=\"#74d9ef\" stroke=\"#102f58\" stroke-width=\"3\"/><path d=\"M18 17l-3-4m20 26 3 4\" stroke=\"#f9c462\" stroke-width=\"3\" stroke-linecap=\"round\"/></svg>", "mock-exam": "<svg class=\"ic-svg\" aria-hidden=\"true\" focusable=\"false\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 52 52\"><rect x=\"10\" y=\"7\" width=\"29\" height=\"37\" rx=\"5\" fill=\"#fff\" stroke=\"#102f58\" stroke-width=\"3\"/><rect x=\"17\" y=\"4\" width=\"15\" height=\"7\" rx=\"3\" fill=\"#92d6ff\" stroke=\"#102f58\" stroke-width=\"2.5\"/><path d=\"m16 19 3 3 5-6m-8 17 3 3 5-6M28 20h6M28 33h6\" fill=\"none\" stroke=\"#00999c\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg>", "skip": "<svg class=\"ic-svg\" aria-hidden=\"true\" focusable=\"false\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 52 52\"><rect x=\"5\" y=\"9\" width=\"42\" height=\"34\" rx=\"14\" fill=\"#e4eaff\" stroke=\"#102f58\" stroke-width=\"3\"/><path d=\"m14 17 13 9-13 9zm18 0v18\" fill=\"#7188de\" stroke=\"#102f58\" stroke-width=\"2.8\" stroke-linejoin=\"round\"/></svg>", "logo": "<svg class=\"ic-svg\" aria-hidden=\"true\" focusable=\"false\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 52 52\"><path d=\"M13 5h14v5l-4 3v10l8 10a4 4 0 0 1-3 6H12a4 4 0 0 1-3-6l8-10V13l-4-3z\" fill=\"#80e8cc\"/><path d=\"M11 30h18l3 5-3 4H11l-3-4z\" fill=\"#14b8a6\"/><path d=\"M13 5h14v5l-4 3v10l8 10a4 4 0 0 1-3 6H12a4 4 0 0 1-3-6l8-10V13l-4-3z\" fill=\"none\" stroke=\"#102f58\" stroke-width=\"2.8\" stroke-linejoin=\"round\"/><circle cx=\"19\" cy=\"29\" r=\"2\" fill=\"#fff\"/><circle cx=\"25\" cy=\"34\" r=\"2\" fill=\"#fff\"/><path d=\"M10 9l-5-4m33 2 4-3M5 18H2\" stroke=\"#ffad57\" stroke-width=\"3\" stroke-linecap=\"round\"/></svg>", "grade": "<svg class=\"ic-svg\" aria-hidden=\"true\" focusable=\"false\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 52 52\"><path d=\"M9 9h34v27H9z\" rx=\"4\" fill=\"#e4d9ff\" stroke=\"#102f58\" stroke-width=\"3\"/><path d=\"m15 24 6 6 12-15\" fill=\"none\" stroke=\"#138d77\" stroke-width=\"4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M22 38h8l4 8-8-3-8 3z\" fill=\"#ffce6a\" stroke=\"#102f58\" stroke-width=\"2.5\"/></svg>", "trophy": "<svg class=\"ic-svg\" aria-hidden=\"true\" focusable=\"false\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 52 52\"><path d=\"M15 7h22v12c0 11-6 15-11 15S15 30 15 19Z\" fill=\"#ffd46b\" stroke=\"#102f58\" stroke-width=\"3\"/><path d=\"M15 12H7c0 11 4 15 12 14m18-14h8c0 11-4 15-12 14\" fill=\"none\" stroke=\"#102f58\" stroke-width=\"3\"/><path d=\"M26 34v8m-10 4h20\" stroke=\"#102f58\" stroke-width=\"4\" stroke-linecap=\"round\"/><path d=\"m26 15 2 4 5 .5-4 3.5 1 5-4-2.5-4 2.5 1-5-4-3.5 5-.5z\" fill=\"#fff4cb\"/></svg>", "hint": "<svg class=\"ic-svg\" aria-hidden=\"true\" focusable=\"false\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 52 52\"><path d=\"M26 7a14 14 0 0 0-9 25c3 2 4 4 4 7h10c0-3 1-5 4-7A14 14 0 0 0 26 7Z\" fill=\"#ffdd76\" stroke=\"#102f58\" stroke-width=\"3\"/><path d=\"M21 40h10m-9 5h8\" stroke=\"#102f58\" stroke-width=\"3\" stroke-linecap=\"round\"/><path d=\"M22 15a8 8 0 0 0-5 7\" fill=\"none\" stroke=\"#fff\" stroke-width=\"3\" stroke-linecap=\"round\"/></svg>", "new-exam": "<svg class=\"ic-svg\" aria-hidden=\"true\" focusable=\"false\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 52 52\"><path d=\"M13 20a15 15 0 1 1 1 17\" fill=\"none\" stroke=\"#102f58\" stroke-width=\"5\" stroke-linecap=\"round\"/><path d=\"M9 11v13h13\" fill=\"none\" stroke=\"#2ab1c4\" stroke-width=\"5\" stroke-linejoin=\"round\"/></svg>"};
+const ic=n=>ICONS[n]||'';
 /* ======================= utilities ======================= */
 const $=id=>document.getElementById(id);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -574,7 +578,7 @@ let ui=LS.get('-ui',{});
 const state={exam:ui.exam||1,mode:ui.mode||'train',topic:ui.topic||'all',q:null,checked:false,streak:0,correct:0,mock:null,timer:null,t0:0};
 const BADGE_URL=n=>`https://itsdrdan.github.io/games/brand/badges/${n}.webp`;
 const img=(n,emoji,cls='bimg')=>`<span class="${cls}"><img src="${BADGE_URL(n)}" alt="" loading="lazy" onerror="this.replaceWith(document.createTextNode('${emoji}'))"></span>`;
-const MODES=[{id:'mock',ic:img('checklist','📝'),t:'Mock Exam',d:'Full practice test, real format, new numbers every time'},{id:'train',ic:img('target','🎯'),t:'Train',d:'One topic at a time with hints and worked solutions'},{id:'weak',ic:img('medal','🩹'),t:'Weak Spots',d:'See what you keep missing, then train it'}];
+const MODES=[{id:'mock',ic:ic('mock-exam'),t:'Mock Exam',d:'Full practice test, real format, new numbers every time'},{id:'train',ic:ic('train'),t:'Train',d:'One topic at a time with hints and worked solutions'},{id:'weak',ic:ic('weak-spots'),t:'Weak Spots',d:'See what you keep missing, then train it'}];
 const SEC_ICON={sig:['scale','⚖️'],conv:['density','🧪'],atom:['molecule','⚛️'],cmpd:['geometry','🔷'],nom:['molecule','🧬'],mole:['gperl','⚖️'],lewis:['geometry','🔷'],thermo:['heat','🔥'],rxn:['react','💥']};
 function saveUI(){LS.set('-ui',{exam:state.exam,mode:state.mode,topic:state.topic})}
 function buildModes(){$('modes').innerHTML=MODES.map(m=>`<button class="mode ${state.mode===m.id?'on':''}" data-m="${m.id}"><span class="ic">${m.ic}</span><b>${m.t}</b><small>${m.d}</small></button>`).join('');$('modes').querySelectorAll('.mode').forEach(b=>b.onclick=()=>{state.mode=b.dataset.m;saveUI();buildModes();show()});
@@ -644,6 +648,7 @@ window.selfTest=function(n=40){const fails=[];const host=document.createElement(
  host.remove();REC=LS.get('-rec',{});console.log(fails.length?fails:'all generators pass');return fails};
 
 /* ---- boot ---- */
+document.querySelectorAll('[data-ic]').forEach(e=>e.outerHTML=ic(e.dataset.ic));$('logoSlot').innerHTML=ic('logo');
 buildModes();renderJ();show();
 </script>
 </body></html>
