@@ -75,7 +75,8 @@ function doPost(e) {
     }
 
     const date = String(d.date || "");
-    if (Date.now() > DEADLINE.getTime()) return json_({ ok: false, error: "Sign-ups closed on November 15." });
+    const late = Date.now() > DEADLINE.getTime();   // after the deadline: still accepted, as a request that isn't guaranteed
+    if (late) d.request = true;
     let hoursAway = null;
     if (date) {
       const startAt = Utilities.parseDate(date.slice(0, 10) + " " + (d.start || "00:00"), "America/Los_Angeles", "yyyy-MM-dd HH:mm");
@@ -99,7 +100,7 @@ function doPost(e) {
 
     const row = [new Date(), name, email, d.section || "", d.exam || "", date ? "'" + date : "", d.dateLabel ? "'" + d.dateLabel : "",
       d.window || "", d.finals ? "Yes" : "", d.noneWork ? "Yes" : "", d.alternatives || "",
-      d.availability || "", d.notes || "", d.noneWork ? "Needs a time" : d.request ? "Requested" : "Booked"];
+      d.availability || "", d.notes || "", late ? "Late request" : d.noneWork ? "Needs a time" : d.request ? "Requested" : "Booked"];
 
     if (rowIndex > 0) sh.getRange(rowIndex, 1, 1, row.length).setValues([row]);
     else sh.appendRow(row);
@@ -107,7 +108,7 @@ function doPost(e) {
     const when = d.when ? d.when : d.noneWork ? "No listed time works. Dr. Dan will email you to set a time."
       : d.finals ? d.dateLabel + " (finals week request). Dr. Dan will email you to confirm the time."
       : d.dateLabel + ", " + d.window + " (office hours)";
-    const body = "Hi " + name + ",\n\n" + (d.request ? "Your CHEM 3A exam retake request is in." : "You're signed up for your CHEM 3A exam retake.") + "\n\n" +
+    const body = "Hi " + name + ",\n\n" + (late ? "Your late CHEM 3A exam retake request is in. The sign-up deadline was November 15, so this time is not guaranteed. Dr. Dan will email you if he can fit you in." : d.request ? "Your CHEM 3A exam retake request is in." : "You're signed up for your CHEM 3A exam retake.") + "\n\n" +
       "Exam: " + d.exam + "\n" +
       "Lab section: " + d.section + "\n" +
       "When: " + when + "\n\n" +
@@ -115,10 +116,11 @@ function doPost(e) {
     if (SEND_STUDENT_EMAIL) { try { MailApp.sendEmail(email, "CHEM 3A exam retake sign-up", body); } catch (err) {} }
     if (NOTIFY_ME) { try { MailApp.sendEmail(NOTIFY_ME, "Retake sign-up: " + name, body + "\n\nNotes: " + (d.notes || "-") + "\nAvailability: " + (d.availability || "-")); } catch (err) {} }
 
-    if (LATE_NOTICE_TO && hoursAway !== null && hoursAway < NOTICE_HOURS) {
-      const what = rowIndex > 0 ? "changed their retake time" : "signed up";
-      try { MailApp.sendEmail(LATE_NOTICE_TO, "Retake within 72 hours: " + name,
-        name + " " + what + " about " + Math.round(hoursAway) + " hours before the exam time.\n\n" +
+    const soon = hoursAway !== null && hoursAway < NOTICE_HOURS;
+    if (LATE_NOTICE_TO && (soon || late)) {
+      const what = (rowIndex > 0 ? "changed their retake time" : "signed up") + (late ? " AFTER the Nov 15 deadline (late request)" : "");
+      try { MailApp.sendEmail(LATE_NOTICE_TO, (late ? "Late retake request: " : "Retake within 72 hours: ") + name,
+        name + " " + what + (hoursAway !== null ? ", about " + Math.round(hoursAway) + " hours before the exam time." : ".") + "\n\n" +
         "Exam: " + d.exam + "\nLab section: " + d.section + "\nWhen: " + (d.dateLabel || "") + ", " + (d.window || "") +
         "\nEmail: " + email + "\nNotes: " + (d.notes || "-")); } catch (err) {}
     }

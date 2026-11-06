@@ -87,7 +87,7 @@ input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 
   </div>
 </header>
 
-<div class="deadline" id="deadline"><b>Sign up by Sunday, November 15 at 11:59 PM.</b> After that, the form closes.</div>
+<div class="deadline" id="deadline"><b>Sign up by Sunday, November 15 at 11:59 PM.</b> After that, you can still send a request, but it is not guaranteed.</div>
 <div class="how" id="how">3 quick steps:
   <ol><li>Your name and lab section</li><li>Which exam</li><li>Tap a day on the calendar, then <b>Sign Up</b></li></ol>
 </div>
@@ -141,7 +141,7 @@ input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 
 
 <section class="card done hidden" id="done">
   <img src="assets/mascot/victory.webp" alt="" onerror="this.style.display='none'">
-  <h2 style="justify-content:center;margin-top:6px">You're signed up!</h2>
+  <h2 style="justify-content:center;margin-top:6px" id="doneHead">You're signed up!</h2>
   <p class="note" id="doneMsg"></p>
   <dl class="sum" id="sum"></dl>
   <div class="row" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:16px">
@@ -304,7 +304,7 @@ function showChosen(){
   const c = $("#chosen"), sl = findSlot(chosen);
   if (!sl) return c.classList.add("hidden");
   c.className = "chosen" + (sl.request ? " req" : isFinals(sl.date) ? " fin" : "");
-  c.textContent = `You picked ${nice(sl.date)}, ${sl.text} in ${sl.room} (${sl.kind}).` + (sl.request ? " I'll email you to confirm." : "");
+  c.textContent = `You picked ${nice(sl.date)}, ${sl.text} in ${sl.room} (${sl.kind}).` + (pastDeadline() ? " Late request: not guaranteed. I'll email you if I can fit you in." : sl.request ? " I'll email you to confirm." : "");
 }
 $("#noneWork").addEventListener("change", e => {
   $("#altBox").classList.toggle("hidden", !e.target.checked);
@@ -328,14 +328,13 @@ $("#form").addEventListener("submit", async e => {
   const data = {
     name: $("#name").value.trim(), email: $("#email").value.trim().toLowerCase(),
     section: labelOf(CONFIG.sections, val("section")), exam: val("exam"),
-    date: sl ? sl.key : "", start: sl ? sl.start : "", dateLabel: sl ? nice(sl.date) : "", finals: false, request: !!(sl && sl.request),
+    date: sl ? sl.key : "", start: sl ? sl.start : "", dateLabel: sl ? nice(sl.date) : "", finals: false, request: !!(sl && sl.request) || pastDeadline(), late: pastDeadline(),
     window: sl ? sl.text + " in " + sl.room : "",
-    when: sl ? nice(sl.date) + ", " + sl.text + " in " + sl.room + (sl.request ? " (by request). Dr. Dan will email you to confirm." : " (" + sl.kind + ")")
+    when: sl ? nice(sl.date) + ", " + sl.text + " in " + sl.room + (pastDeadline() ? " (late request, not guaranteed). Dr. Dan will email you if he can fit you in." : sl.request ? " (by request). Dr. Dan will email you to confirm." : " (" + sl.kind + ")")
       + "\n\nPlease arrive at the START of this time so you get the full " + examMins(val("exam")) + " minutes for " + val("exam") + ". If you come late, you get less time." : "",
     noneWork: none, alternatives: alts.map(a=>labelOf(CONFIG.alternatives,a)).join("; "),
     availability: $("#avail").value.trim(), notes: $("#notes").value.trim()
   };
-  if (pastDeadline()) return fail("Sign-ups closed on November 15. Message Dr. Dan in Canvas.");
   if (!data.name) return fail("Type your full name.", $("#name"));
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(data.email)) return fail("Type a working email so I can confirm your retake.", $("#email"));
   if (!val("section")) return fail("Tap your lab section.", $("#sections"));
@@ -355,7 +354,7 @@ $("#form").addEventListener("submit", async e => {
     showDone(data, sl);
   } catch(err) {
     fail((err.message || "Couldn't reach the sign-up sheet.") + " Try again, or message Dr. Dan in Canvas.");
-  } finally { btn.disabled = false; btn.textContent = "Sign Up"; }
+  } finally { btn.disabled = false; btn.textContent = pastDeadline() ? "Send Late Request" : "Sign Up"; }
 });
 
 function showDone(d, sl){
@@ -366,10 +365,11 @@ function showDone(d, sl){
   if (d.availability) rows.push(["Availability",d.availability]);
   $("#sum").innerHTML = rows.map(([k,v])=>`<div><dt>${k}</dt><dd></dd></div>`).join("");
   [...$("#sum").querySelectorAll("dd")].forEach((dd,i)=>dd.textContent = rows[i][1]);
+  if (d.late) $("#doneHead").textContent = "Request sent";
   const arrive = " Please arrive at the start of your time so you get the full " + examMins(d.exam) + " minutes for " + d.exam + ".";
-  $("#doneMsg").textContent = d.noneWork ? "Your request is in. I'll email you to set a time." + arrive : sl.request ? "Your request is in. I'll email you to confirm before you come in." + arrive : "See you then. Bring a pencil and your calculator." + arrive;
+  $("#doneMsg").textContent = d.late ? "Your late request is in. It is not guaranteed; I'll email you if I can fit you in." + arrive : d.noneWork ? "Your request is in. I'll email you to set a time." + arrive : sl.request ? "Your request is in. I'll email you to confirm before you come in." + arrive : "See you then. Bring a pencil and your calculator." + arrive;
   const g = $("#gcal");
-  if (sl && !sl.request){
+  if (sl && !sl.request && !d.late){
     const [hh, mm] = sl.start.split(":").map(Number), endMin = hh*60 + mm + examMins(d.exam);
     const ymd = sl.date.replace(/-/g,""), st = sl.start.replace(":","")+"00", en = String(Math.floor(endMin/60)).padStart(2,"0") + String(endMin%60).padStart(2,"0") + "00";
     g.href = "https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent("CHEM 3A "+d.exam+" retake")+"&dates="+ymd+"T"+st+"/"+ymd+"T"+en+"&ctz=America/Los_Angeles&location="+encodeURIComponent("Fresno City College "+sl.room)+"&details="+encodeURIComponent("CHEM 3A " + d.exam + " retake with Dr. Dan (" + examMins(d.exam) + " minutes). Arrive at the start of the time. Bring a pencil and calculator.");
@@ -377,7 +377,7 @@ function showDone(d, sl){
   $("#done").classList.remove("hidden"); window.scrollTo({top:0,behavior:"smooth"});
 }
 
-if (pastDeadline()) { $("#deadline").innerHTML = "<b>Sign-ups closed on November 15.</b> Questions? Message Dr. Dan in Canvas."; $("#submit").disabled = true; }
+if (pastDeadline()) { $("#deadline").innerHTML = "<b>The sign-up deadline (November 15) has passed.</b> You can still send a request, but it is not guaranteed. I'll email you if I can fit you in."; $("#submit").textContent = "Send Late Request"; }
 drawCal(); loadCounts();
 </script>
 <script src="https://itsdrdan.github.io/games/brand/embed.js" defer></script>
