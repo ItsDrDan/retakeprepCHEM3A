@@ -139,7 +139,8 @@ function doPost(e) {
         "\nEmail: " + email + "\nNotes: " + (d.notes || "-")); } catch (err) {}
     }
     try { buildSchedule_(sh); } catch (err) {}
-    try { buildRoster_(sh); } catch (err) {}
+    // The Roster tab is rebuilt by its own hourly trigger (buildRoster), not here, so a sharing problem
+    // with the attendance sheet can never break a student's sign-up.
     return json_({ ok: true, counts: counts_(sh) });
   } catch (err) {
     return json_({ ok: false, error: "Server error: " + err });
@@ -194,7 +195,8 @@ function buildSchedule_(sh) {
 
 // Rebuilds the "Roster" tab: every student from the attendance sheet, checked off when they fill out the form
 // (signed up or said no retake). Not-yet-responded students are listed first so you know who to remind.
-// Runs after each sign-up. You can also run it by hand: pick buildRoster in the function menu and click Run.
+// Runs on an hourly time trigger (Triggers > Add trigger > buildRoster > Time-driven > Hour timer).
+// You can also run it by hand: pick buildRoster in the function menu and click Run.
 function buildRoster() { buildRoster_(sheet_()); }
 function buildRoster_(sh) {
   const ss = sh.getParent();
