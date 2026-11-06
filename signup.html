@@ -56,6 +56,7 @@ input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 
 .chosen.fin{background:var(--amber);border-color:var(--amber-line);color:var(--amber-ink)}
 .slots{margin-top:12px}.slots h3{font-size:15px;margin:0 0 8px;font-weight:800}
 .pick input:disabled+span{opacity:.5;cursor:not-allowed;transform:none}
+.arrive{margin:0 0 12px;padding:10px 14px;border-radius:12px;background:var(--amber);border:1px solid var(--amber-line);color:var(--amber-ink);font-size:14.5px}
 .toggle{display:flex;gap:10px;align-items:flex-start;margin-top:14px;padding:12px 14px;border:2px dashed var(--line2);border-radius:14px;cursor:pointer;font-weight:800}
 .toggle input{width:22px;height:22px;margin:1px 0 0;accent-color:var(--c3A);flex:none}
 .alt{margin-top:10px;padding:12px 14px;border-radius:14px;background:var(--lav)}
@@ -114,6 +115,7 @@ input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 
       <span><i style="background:var(--amber);border-color:var(--amber-line)"></i>Finals week (set times)</span>
       <span><i style="background:#f1f2f7;border-color:#eceef5"></i>Not available</span>
     </div>
+    <p class="arrive"><b>Arrive at the start of your time</b> so you get the full time: Exam 1 is 60 minutes, Exam 2 is 90 minutes. If you come late, you get less time.</p>
     <div class="cal" id="cal"></div>
     <div class="slots hidden" id="slotBox"><h3 id="slotHead"></h3><div class="picks" id="slotPick"></div></div>
     <div class="chosen hidden" id="chosen"></div>
@@ -191,8 +193,8 @@ const CONFIG = {
     { id: "sat11", label: "Saturday 11:30 AM lab",sub: "Friday lecture" }
   ],
   exams: [
-    { id: "Exam 1", label: "Exam 1", sub: "Ch 1–4" },
-    { id: "Exam 2", label: "Exam 2", sub: "Ch 4–7 and 10" }
+    { id: "Exam 1", label: "Exam 1", sub: "Ch 1–4 · 60 minutes", mins: 60 },
+    { id: "Exam 2", label: "Exam 2", sub: "Ch 4–7 and 10 · 90 minutes", mins: 90 }
   ],
   alternatives: [
     { id: "GRASP Fri 8-12", label: "GRASP, Friday 8 AM–12 PM", sub: "If another instructor can give it" },
@@ -306,6 +308,7 @@ async function loadCounts(){
   try { const r = await fetch(CONFIG.scriptUrl+"?action=counts"); const j = await r.json(); counts = j.counts || {}; drawCal(); drawSlots(); } catch(e) {}
 }
 
+const examMins = id => (CONFIG.exams.find(x => x.id === id) || {}).mins || 60;
 function val(name){ const x = document.querySelector(`input[name="${name}"]:checked`); return x ? x.value : ""; }
 function labelOf(list,id){ const o = list.find(x=>x.id===id); return o ? o.label : id; }
 function fail(msg, el){ const e = $("#err"); e.textContent = msg; e.classList.remove("hidden"); (el||e).scrollIntoView({behavior:"smooth",block:"center"}); return false; }
@@ -319,7 +322,8 @@ $("#form").addEventListener("submit", async e => {
     section: labelOf(CONFIG.sections, val("section")), exam: val("exam"),
     date: sl ? sl.key : "", dateLabel: sl ? nice(sl.date) : "", finals: false, request: !!(sl && sl.request),
     window: sl ? sl.text + " in " + sl.room : "",
-    when: sl ? nice(sl.date) + ", " + sl.text + " in " + sl.room + (sl.request ? " (by request). Dr. Dan will email you to confirm." : " (" + sl.kind + ")") : "",
+    when: sl ? nice(sl.date) + ", " + sl.text + " in " + sl.room + (sl.request ? " (by request). Dr. Dan will email you to confirm." : " (" + sl.kind + ")")
+      + "\n\nPlease arrive at the START of this time so you get the full " + examMins(val("exam")) + " minutes for " + val("exam") + ". If you come late, you get less time." : "",
     noneWork: none, alternatives: alts.map(a=>labelOf(CONFIG.alternatives,a)).join("; "),
     availability: $("#avail").value.trim(), notes: $("#notes").value.trim()
   };
@@ -352,11 +356,13 @@ function showDone(d, sl){
   if (d.availability) rows.push(["Availability",d.availability]);
   $("#sum").innerHTML = rows.map(([k,v])=>`<div><dt>${k}</dt><dd></dd></div>`).join("");
   [...$("#sum").querySelectorAll("dd")].forEach((dd,i)=>dd.textContent = rows[i][1]);
-  $("#doneMsg").textContent = d.noneWork ? "Your request is in. I'll email you to set a time." : sl.request ? "Your request is in. I'll email you to confirm before you come in." : "See you then. Bring a pencil and your calculator.";
+  const arrive = " Please arrive at the start of your time so you get the full " + examMins(d.exam) + " minutes for " + d.exam + ".";
+  $("#doneMsg").textContent = d.noneWork ? "Your request is in. I'll email you to set a time." + arrive : sl.request ? "Your request is in. I'll email you to confirm before you come in." + arrive : "See you then. Bring a pencil and your calculator." + arrive;
   const g = $("#gcal");
   if (sl && !sl.request){
-    const ymd = sl.date.replace(/-/g,""), st = sl.start.replace(":","")+"00", en = sl.end.replace(":","")+"00";
-    g.href = "https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent("CHEM 3A "+d.exam+" retake")+"&dates="+ymd+"T"+st+"/"+ymd+"T"+en+"&ctz=America/Los_Angeles&location="+encodeURIComponent("Fresno City College "+sl.room)+"&details="+encodeURIComponent("CHEM 3A exam retake with Dr. Dan. Bring a pencil and calculator.");
+    const [hh, mm] = sl.start.split(":").map(Number), endMin = hh*60 + mm + examMins(d.exam);
+    const ymd = sl.date.replace(/-/g,""), st = sl.start.replace(":","")+"00", en = String(Math.floor(endMin/60)).padStart(2,"0") + String(endMin%60).padStart(2,"0") + "00";
+    g.href = "https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent("CHEM 3A "+d.exam+" retake")+"&dates="+ymd+"T"+st+"/"+ymd+"T"+en+"&ctz=America/Los_Angeles&location="+encodeURIComponent("Fresno City College "+sl.room)+"&details="+encodeURIComponent("CHEM 3A " + d.exam + " retake with Dr. Dan (" + examMins(d.exam) + " minutes). Arrive at the start of the time. Bring a pencil and calculator.");
   } else g.classList.add("hidden");
   $("#done").classList.remove("hidden"); window.scrollTo({top:0,behavior:"smooth"});
 }
