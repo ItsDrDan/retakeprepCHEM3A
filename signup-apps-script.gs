@@ -18,6 +18,10 @@ const SEATS_BY_DAY = null; // null = no limit. To cap: { 1: 8, 3: 8, 5: 30 } (Mo
 const SLOT_CAPS = { "2026-12-07T12:00": 5, "2026-12-07T16:00": 5, "2026-12-11T08:00": 10 };
 const SEND_STUDENT_EMAIL = true;  // emails each student a confirmation
 const NOTIFY_ME = "";             // your email to get a copy of each sign-up ("" = off)
+// Sign-ups close MIN_HOURS before a time. A sign-up or change between MIN_HOURS and NOTICE_HOURS emails LATE_NOTICE_TO.
+const MIN_HOURS = 48, NOTICE_HOURS = 72;
+const DEADLINE = Utilities.parseDate("2026-11-15 23:59:59", "America/Los_Angeles", "yyyy-MM-dd HH:mm:ss"); // last moment to sign up or change
+const LATE_NOTICE_TO = "dk021@fresnocitycollege.edu";
 const SHEET_NAME = "Sign-Ups";
 const SHEET_ID = "1O7V98-8H3C4siBkKOouEbStVHFy6G4Qt3eKMsQ41EQo"; // the "CHEM 3A Retake Sign-Ups" Google Sheet ("" = the sheet this script is attached to)
 
@@ -71,6 +75,13 @@ function doPost(e) {
     }
 
     const date = String(d.date || "");
+    if (Date.now() > DEADLINE.getTime()) return json_({ ok: false, error: "Sign-ups closed on November 15." });
+    let hoursAway = null;
+    if (date) {
+      const startAt = Utilities.parseDate(date.slice(0, 10) + " " + (d.start || "00:00"), "America/Los_Angeles", "yyyy-MM-dd HH:mm");
+      hoursAway = (startAt.getTime() - Date.now()) / 3600000;
+      if (hoursAway < MIN_HOURS) return json_({ ok: false, error: "Sign-ups close 48 hours before each time. Pick a later day." });
+    }
     const p = date.slice(0, 10).split("-").map(Number), dow = new Date(p[0], p[1] - 1, p[2]).getDay();
     const cap = SLOT_CAPS[date] || (SEATS_BY_DAY && date.length === 10 ? SEATS_BY_DAY[dow] : 0);
     if (cap) {
@@ -104,6 +115,13 @@ function doPost(e) {
     if (SEND_STUDENT_EMAIL) { try { MailApp.sendEmail(email, "CHEM 3A exam retake sign-up", body); } catch (err) {} }
     if (NOTIFY_ME) { try { MailApp.sendEmail(NOTIFY_ME, "Retake sign-up: " + name, body + "\n\nNotes: " + (d.notes || "-") + "\nAvailability: " + (d.availability || "-")); } catch (err) {} }
 
+    if (LATE_NOTICE_TO && hoursAway !== null && hoursAway < NOTICE_HOURS) {
+      const what = rowIndex > 0 ? "changed their retake time" : "signed up";
+      try { MailApp.sendEmail(LATE_NOTICE_TO, "Retake within 72 hours: " + name,
+        name + " " + what + " about " + Math.round(hoursAway) + " hours before the exam time.\n\n" +
+        "Exam: " + d.exam + "\nLab section: " + d.section + "\nWhen: " + (d.dateLabel || "") + ", " + (d.window || "") +
+        "\nEmail: " + email + "\nNotes: " + (d.notes || "-")); } catch (err) {}
+    }
     try { buildSchedule_(sh); } catch (err) {}
     return json_({ ok: true, counts: counts_(sh) });
   } catch (err) {
