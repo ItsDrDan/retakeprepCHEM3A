@@ -52,6 +52,8 @@ input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 
 .day.full .s{color:var(--rose-ink)}
 .chosen{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--mint);border:1px solid var(--mint-line);color:var(--mint-ink);font-weight:800}
 .chosen.fin{background:var(--amber);border-color:var(--amber-line);color:var(--amber-ink)}
+.slots{margin-top:12px}.slots h3{font-size:15px;margin:0 0 8px;font-weight:800}
+.pick input:disabled+span{opacity:.5;cursor:not-allowed;transform:none}
 .toggle{display:flex;gap:10px;align-items:flex-start;margin-top:14px;padding:12px 14px;border:2px dashed var(--line2);border-radius:14px;cursor:pointer;font-weight:800}
 .toggle input{width:22px;height:22px;margin:1px 0 0;accent-color:var(--c3A);flex:none}
 .alt{margin-top:10px;padding:12px 14px;border-radius:14px;background:var(--lav)}
@@ -106,10 +108,11 @@ input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 
     <h2><span class="num">3</span>Pick a day</h2>
     <div class="legend">
       <span><i style="background:#fff"></i>Office hours: Mon/Wed 2:00–3:50 PM (NS-303), Fri 12–2 PM (NS-127)</span>
-      <span><i style="background:var(--amber);border-color:var(--amber-line)"></i>Finals week (tentative)</span>
+      <span><i style="background:var(--amber);border-color:var(--amber-line)"></i>Finals week (set times)</span>
       <span><i style="background:#f1f2f7;border-color:#eceef5"></i>Not available</span>
     </div>
     <div class="cal" id="cal"></div>
+    <div class="slots hidden" id="slotBox"><h3 id="slotHead"></h3><div class="picks" id="slotPick"></div></div>
     <div class="chosen hidden" id="chosen"></div>
 
     <label class="toggle"><input type="checkbox" id="noneWork"> <span>None of these times work for me</span></label>
@@ -160,7 +163,17 @@ const CONFIG = {
   lastDay:  "2026-12-04",
   days: [1, 3, 5],                      // Mon, Wed, Fri
   closed: { "2026-11-27": "Holiday" },  // campus closed (Thanksgiving in-lieu day)
-  finals: { start: "2026-12-07", end: "2026-12-11", days: [1,2,3,4,5], text: "time TBA" },
+  // Finals week retake times. cap = spots (leave out for no limit). only / except = lab section ids.
+  // Keep caps the same as SLOT_CAPS in the Apps Script.
+  finals: { start: "2026-12-07", end: "2026-12-11", slots: [
+    { date: "2026-12-07", start: "12:00", end: "13:50", text: "12:00–1:50 PM",      room: "NS-101", cap: 5, only: ["sat8","sat11"] },
+    { date: "2026-12-07", start: "14:00", end: "15:50", text: "2:00–3:50 PM",       room: "NS-303" },
+    { date: "2026-12-07", start: "16:00", end: "17:50", text: "4:00–5:50 PM",       room: "NS-337", cap: 5 },
+    { date: "2026-12-08", start: "12:00", end: "14:00", text: "12:00–2:00 PM",      room: "NS-337" },
+    { date: "2026-12-09", start: "12:00", end: "14:00", text: "12:00–2:00 PM",      room: "NS-337" },
+    { date: "2026-12-11", start: "08:00", end: "09:50", text: "8:00–9:50 AM",       room: "NS-101", except: ["sat8","sat11"] },
+    { date: "2026-12-11", start: "10:00", end: "12:00", text: "10:00 AM–12:00 PM",  room: "NS-303", except: ["sat8","sat11"] }
+  ]},
   sections: [
     { id: "tue",   label: "Tuesday 12 PM lab",     sub: "Mon/Wed lecture" },
     { id: "thu",   label: "Thursday 12 PM lab",    sub: "Mon/Wed lecture" },
@@ -193,59 +206,92 @@ function picks(el, name, list){
 picks($("#sections"), "section", CONFIG.sections);
 picks($("#exams"), "exam", CONFIG.exams);
 picks($("#alts"), "alt", CONFIG.alternatives);
-const hrs = s => CONFIG.hours[parse(s).getDay()];
-const whenTxt = s => hrs(s).text + " in " + hrs(s).room;
-
+const SAT = ["sat8","sat11"];
+let chosenDay = null;
 function isFinals(s){ return s >= CONFIG.finals.start && s <= CONFIG.finals.end; }
+function slotsFor(s){
+  if (CONFIG.closed[s]) return [];
+  const dow = parse(s).getDay(), out = [];
+  if (s >= CONFIG.firstDay && s <= CONFIG.lastDay && CONFIG.days.includes(dow)) {
+    const h = CONFIG.hours[dow];
+    out.push({ ...h, date: s, key: s, cap: CONFIG.seats ? CONFIG.seats[dow] : null, kind: "office hours" });
+  }
+  CONFIG.finals.slots.filter(x => x.date === s).forEach(x => out.push({ ...x, key: s + "T" + x.start, kind: "finals week" }));
+  return out;
+}
+const findSlot = k => k ? slotsFor(k.slice(0,10)).find(x => x.key === k) : null;
+function allowed(sl){
+  const sec = val("section"); if (!sec) return true;
+  if (sl.only && !sl.only.includes(sec)) return false;
+  if (sl.except && sl.except.includes(sec)) return false;
+  return true;
+}
+const left = sl => sl.cap ? sl.cap - (counts[sl.key] || 0) : Infinity;
+const ruleTxt = sl => sl.only ? "Saturday lab students only" : sl.except && sl.except.join() === SAT.join() ? "Not for Saturday labs (your final is then)" : "";
+
 function drawCal(){
   const cal = $("#cal"), today = iso(new Date());
   let h = ["Mon","Tue","Wed","Thu","Fri"].map(d=>`<div class="dow">${d}</div>`).join("");
   const start = parse(CONFIG.firstDay); start.setDate(start.getDate() - ((start.getDay()+6)%7));
   const end = parse(CONFIG.finals.end > CONFIG.lastDay ? CONFIG.finals.end : CONFIG.lastDay);
   for (let wk = new Date(start); wk <= end; wk.setDate(wk.getDate()+7)){
-    const first = iso(wk), fin = isFinals(first) || isFinals(iso(new Date(wk.getFullYear(),wk.getMonth(),wk.getDate()+4)));
-    h += `<div class="wk">${fin ? "Finals week (tentative)" : "Week of "+MON[wk.getMonth()]+" "+wk.getDate()}</div>`;
+    const fin = isFinals(iso(wk)) || isFinals(iso(new Date(wk.getFullYear(),wk.getMonth(),wk.getDate()+4)));
+    h += `<div class="wk">${fin ? "Finals week" : "Week of "+MON[wk.getMonth()]+" "+wk.getDate()}</div>`;
     for (let i=0;i<5;i++){
-      const d = new Date(wk.getFullYear(), wk.getMonth(), wk.getDate()+i), s = iso(d), dow = d.getDay();
-      const inReg = s >= CONFIG.firstDay && s <= CONFIG.lastDay && CONFIG.days.includes(dow);
-      const inFin = isFinals(s) && CONFIG.finals.days.includes(dow);
+      const d = new Date(wk.getFullYear(), wk.getMonth(), wk.getDate()+i), s = iso(d);
+      const sl = slotsFor(s), open = sl.filter(x => allowed(x) && left(x) > 0);
       let label = "", dis = false, cls = "day";
       if (CONFIG.closed[s]) { label = CONFIG.closed[s]; dis = true; }
       else if (s < today) { label = "Past"; dis = true; }
-      else if (inReg) {
-        const left = CONFIG.seats ? (CONFIG.seats[dow]||0) - (counts[s]||0) : Infinity;
-        if (left <= 0) { label = "Full"; dis = true; cls += " full"; }
-        else label = CONFIG.seats && CONFIG.scriptUrl ? left+" left" : CONFIG.hours[dow].room;
-      }
-      else if (inFin) { label = "Request"; cls += " fin"; }
-      else { label = "—"; dis = true; }
-      if (s === chosen) cls += " on";
+      else if (!sl.length) { label = "—"; dis = true; }
+      else if (!open.length) { label = sl.some(x => !allowed(x)) ? "Not your lab" : "Full"; dis = true; cls += " full"; }
+      else label = sl.length === 1 ? sl[0].room : open.length + (open.length === 1 ? " time" : " times");
+      if (isFinals(s) && sl.length) cls += " fin";
+      if (s === chosenDay) cls += " on";
       h += `<button type="button" class="${cls}" data-d="${s}" ${dis?"disabled":""} aria-label="${nice(s)}: ${label}"><span class="m">${MON[d.getMonth()]}</span><b>${d.getDate()}</b><span class="s">${label}</span></button>`;
     }
   }
   cal.innerHTML = h;
 }
+function drawSlots(){
+  const box = $("#slotBox"), sl = chosenDay ? slotsFor(chosenDay) : [];
+  if (sl.length < 2 && !(sl.length && isFinals(chosenDay))) { box.classList.add("hidden"); return; }
+  $("#slotHead").textContent = "Pick a time on " + nice(chosenDay);
+  $("#slotPick").innerHTML = sl.map(x => {
+    const ok = allowed(x), l = left(x), dis = !ok || l <= 0;
+    const sub = [x.room, ruleTxt(x), x.cap ? (l <= 0 ? "Full" : l + " of " + x.cap + " spots left") : ""].filter(Boolean).join(" · ");
+    return `<label class="pick"><input type="radio" name="slot" value="${x.key}" ${dis?"disabled":""} ${x.key===chosen?"checked":""}><span>${x.text}<small>${sub}</small></span></label>`;
+  }).join("");
+  box.classList.remove("hidden");
+}
 $("#cal").addEventListener("click", e => {
   const b = e.target.closest(".day"); if (!b || b.disabled) return;
-  chosen = b.dataset.d; $("#noneWork").checked = false; $("#altBox").classList.add("hidden");
-  drawCal(); showChosen();
+  chosenDay = b.dataset.d; $("#noneWork").checked = false; $("#altBox").classList.add("hidden");
+  const open = slotsFor(chosenDay).filter(x => allowed(x) && left(x) > 0);
+  chosen = open.length === 1 ? open[0].key : null;
+  drawCal(); drawSlots(); showChosen();
+  if (!chosen) $("#slotBox").scrollIntoView({behavior:"smooth",block:"center"});
+});
+$("#slotPick").addEventListener("change", e => { if (e.target.name === "slot") { chosen = e.target.value; showChosen(); } });
+$("#sections").addEventListener("change", () => {
+  const sl = findSlot(chosen); if (sl && !allowed(sl)) chosen = null;
+  if (chosenDay && !slotsFor(chosenDay).some(x => allowed(x) && left(x) > 0)) chosenDay = null;
+  drawCal(); drawSlots(); showChosen();
 });
 function showChosen(){
-  const c = $("#chosen");
-  if (!chosen) return c.classList.add("hidden");
-  const fin = isFinals(chosen);
-  c.className = "chosen" + (fin ? " fin" : "");
-  c.textContent = fin ? `You picked ${nice(chosen)} (finals week). This one is a request; I'll email you to confirm the time.`
-                      : `You picked ${nice(chosen)}, ${whenTxt(chosen)} (office hours).`;
+  const c = $("#chosen"), sl = findSlot(chosen);
+  if (!sl) return c.classList.add("hidden");
+  c.className = "chosen" + (isFinals(sl.date) ? " fin" : "");
+  c.textContent = `You picked ${nice(sl.date)}, ${sl.text} in ${sl.room} (${sl.kind}).`;
 }
 $("#noneWork").addEventListener("change", e => {
   $("#altBox").classList.toggle("hidden", !e.target.checked);
-  if (e.target.checked) { chosen = null; drawCal(); showChosen(); }
+  if (e.target.checked) { chosen = null; chosenDay = null; drawCal(); drawSlots(); showChosen(); }
 });
 
 async function loadCounts(){
   if (!CONFIG.scriptUrl) { $("#preview").classList.remove("hidden"); return; }
-  try { const r = await fetch(CONFIG.scriptUrl+"?action=counts"); const j = await r.json(); counts = j.counts || {}; drawCal(); } catch(e) {}
+  try { const r = await fetch(CONFIG.scriptUrl+"?action=counts"); const j = await r.json(); counts = j.counts || {}; drawCal(); drawSlots(); } catch(e) {}
 }
 
 function val(name){ const x = document.querySelector(`input[name="${name}"]:checked`); return x ? x.value : ""; }
@@ -255,20 +301,22 @@ function fail(msg, el){ const e = $("#err"); e.textContent = msg; e.classList.re
 $("#form").addEventListener("submit", async e => {
   e.preventDefault(); $("#err").classList.add("hidden");
   const none = $("#noneWork").checked, alts = [...document.querySelectorAll('input[name="alt"]:checked')].map(x=>x.value);
+  const sl = none ? null : findSlot(chosen);
   const data = {
     name: $("#name").value.trim(), email: $("#email").value.trim().toLowerCase(),
     section: labelOf(CONFIG.sections, val("section")), exam: val("exam"),
-    date: none ? "" : (chosen||""), dateLabel: none ? "" : (chosen ? nice(chosen) : ""),
-    finals: !!(chosen && isFinals(chosen) && !none),
+    date: sl ? sl.key : "", dateLabel: sl ? nice(sl.date) : "", finals: false,
+    window: sl ? sl.text + " in " + sl.room : "",
+    when: sl ? nice(sl.date) + ", " + sl.text + " in " + sl.room + " (" + sl.kind + ")" : "",
     noneWork: none, alternatives: alts.map(a=>labelOf(CONFIG.alternatives,a)).join("; "),
-    availability: $("#avail").value.trim(), notes: $("#notes").value.trim(),
-    window: (chosen && !none && !isFinals(chosen)) ? whenTxt(chosen) : ""
+    availability: $("#avail").value.trim(), notes: $("#notes").value.trim()
   };
   if (!data.name) return fail("Type your full name.", $("#name"));
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(data.email)) return fail("Type a working email so I can confirm your retake.", $("#email"));
   if (!val("section")) return fail("Tap your lab section.", $("#sections"));
   if (!data.exam) return fail("Tap which exam you're retaking.", $("#exams"));
-  if (!none && !chosen) return fail("Tap a day on the calendar, or check \"None of these times work for me.\"", $("#cal"));
+  if (!none && !sl) return chosenDay ? fail("Pick a time for " + nice(chosenDay) + ".", $("#slotBox")) : fail("Tap a day on the calendar, or check \"None of these times work for me.\"", $("#cal"));
+  if (sl && !allowed(sl)) return fail("That time isn't open to your lab section. Pick another time.", $("#slotBox"));
   if (none && !alts.length && !data.availability) return fail("Pick an option or type when you're available.", $("#altBox"));
 
   const btn = $("#submit"); btn.disabled = true; btn.textContent = "Signing you up…";
@@ -276,27 +324,27 @@ $("#form").addEventListener("submit", async e => {
     if (CONFIG.scriptUrl) {
       const r = await fetch(CONFIG.scriptUrl, { method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"}, body: JSON.stringify(data) });
       const j = await r.json();
-      if (!j.ok) { if (j.counts) { counts = j.counts; drawCal(); } throw new Error(j.error || "Something went wrong."); }
+      if (!j.ok) { if (j.counts) { counts = j.counts; drawCal(); drawSlots(); } throw new Error(j.error || "Something went wrong."); }
     }
-    showDone(data);
+    showDone(data, sl);
   } catch(err) {
     fail((err.message || "Couldn't reach the sign-up sheet.") + " Try again, or message Dr. Dan in Canvas.");
   } finally { btn.disabled = false; btn.textContent = "Sign Up"; }
 });
 
-function showDone(d){
+function showDone(d, sl){
   $("#form").classList.add("hidden"); $("#how").classList.add("hidden");
-  const when = d.noneWork ? "No listed time works (I'll email you)" : d.finals ? d.dateLabel+" (finals week request, time TBA)" : d.dateLabel+", "+d.window;
+  const when = d.noneWork ? "No listed time works (I'll email you)" : nice(sl.date) + ", " + sl.text + " in " + sl.room;
   const rows = [["Name",d.name],["Email",d.email],["Lab section",d.section],["Exam",d.exam],["When",when]];
   if (d.noneWork && d.alternatives) rows.push(["Options",d.alternatives]);
   if (d.availability) rows.push(["Availability",d.availability]);
   $("#sum").innerHTML = rows.map(([k,v])=>`<div><dt>${k}</dt><dd></dd></div>`).join("");
   [...$("#sum").querySelectorAll("dd")].forEach((dd,i)=>dd.textContent = rows[i][1]);
-  $("#doneMsg").textContent = d.noneWork || d.finals ? "Your request is in. I'll email you to confirm a time." : "See you at office hours. Bring a pencil and your calculator.";
+  $("#doneMsg").textContent = d.noneWork ? "Your request is in. I'll email you to set a time." : "See you then. Bring a pencil and your calculator.";
   const g = $("#gcal");
-  if (d.date && !d.finals){
-    const ymd = d.date.replace(/-/g,""), h = hrs(d.date), st = h.start.replace(":","")+"00", en = h.end.replace(":","")+"00";
-    g.href = "https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent("CHEM 3A "+d.exam+" retake")+"&dates="+ymd+"T"+st+"/"+ymd+"T"+en+"&ctz=America/Los_Angeles&location="+encodeURIComponent("Fresno City College "+h.room)+"&details="+encodeURIComponent("Exam retake during Dr. Dan's office hours. Bring a pencil and calculator.");
+  if (sl){
+    const ymd = sl.date.replace(/-/g,""), st = sl.start.replace(":","")+"00", en = sl.end.replace(":","")+"00";
+    g.href = "https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent("CHEM 3A "+d.exam+" retake")+"&dates="+ymd+"T"+st+"/"+ymd+"T"+en+"&ctz=America/Los_Angeles&location="+encodeURIComponent("Fresno City College "+sl.room)+"&details="+encodeURIComponent("CHEM 3A exam retake with Dr. Dan. Bring a pencil and calculator.");
   } else g.classList.add("hidden");
   $("#done").classList.remove("hidden"); window.scrollTo({top:0,behavior:"smooth"});
 }

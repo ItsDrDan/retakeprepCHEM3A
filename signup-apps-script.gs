@@ -14,6 +14,8 @@
  */
 
 const SEATS_BY_DAY = null; // null = no limit. To cap: { 1: 8, 3: 8, 5: 30 } (Mon, Wed, Fri; also set CONFIG.seats in signup.html)
+// Spot limits for single time slots (key = date + "T" + start time). Keep the same as the caps in signup.html.
+const SLOT_CAPS = { "2026-12-07T12:00": 5, "2026-12-07T16:00": 5 };
 const SEND_STUDENT_EMAIL = true;  // emails each student a confirmation
 const NOTIFY_ME = "";             // your email to get a copy of each sign-up ("" = off)
 const SHEET_NAME = "Sign-Ups";
@@ -39,7 +41,7 @@ function counts_(sh) {
   const rows = sh.getDataRange().getValues().slice(1);
   rows.forEach(r => {
     const date = r[5] instanceof Date ? Utilities.formatDate(r[5], "America/Los_Angeles", "yyyy-MM-dd") : String(r[5] || "");
-    if (date && r[8] !== "Yes" && r[13] !== "Cancelled") out[date] = (out[date] || 0) + 1;
+    if (date && r[13] !== "Cancelled") out[date] = (out[date] || 0) + 1;
   });
   return out;
 }
@@ -69,7 +71,9 @@ function doPost(e) {
     }
 
     const date = String(d.date || "");
-    if (SEATS_BY_DAY && date && !d.finals) {
+    const p = date.slice(0, 10).split("-").map(Number), dow = new Date(p[0], p[1] - 1, p[2]).getDay();
+    const cap = SLOT_CAPS[date] || (SEATS_BY_DAY && date.length === 10 ? SEATS_BY_DAY[dow] : 0);
+    if (cap) {
       const c = counts_(sh);
       let mine = 0;
       if (rowIndex > 0) {
@@ -77,21 +81,19 @@ function doPost(e) {
         const oldDate = old instanceof Date ? Utilities.formatDate(old, "America/Los_Angeles", "yyyy-MM-dd") : String(old);
         if (oldDate === date) mine = 1;
       }
-      const p = date.split("-").map(Number), dow = new Date(p[0], p[1] - 1, p[2]).getDay();
-      if ((c[date] || 0) - mine >= (SEATS_BY_DAY[dow] || 0)) {
-        return json_({ ok: false, error: "Sorry, that day just filled up. Pick another day.", counts: c });
+      if ((c[date] || 0) - mine >= cap) {
+        return json_({ ok: false, error: "Sorry, that time just filled up. Pick another time.", counts: c });
       }
     }
 
-    const row = [new Date(), name, email, d.section || "", d.exam || "", date, d.dateLabel || "",
+    const row = [new Date(), name, email, d.section || "", d.exam || "", date ? "'" + date : "", d.dateLabel || "",
       d.window || "", d.finals ? "Yes" : "", d.noneWork ? "Yes" : "", d.alternatives || "",
-      d.availability || "", d.notes || "", d.noneWork || d.finals ? "Needs a time" : "Booked"];
+      d.availability || "", d.notes || "", d.noneWork ? "Needs a time" : "Booked"];
 
     if (rowIndex > 0) sh.getRange(rowIndex, 1, 1, row.length).setValues([row]);
     else sh.appendRow(row);
-    if (date) sh.getRange(rowIndex > 0 ? rowIndex : sh.getLastRow(), 6).setNumberFormat("@");
 
-    const when = d.noneWork ? "No listed time works. Dr. Dan will email you to set a time."
+    const when = d.when ? d.when : d.noneWork ? "No listed time works. Dr. Dan will email you to set a time."
       : d.finals ? d.dateLabel + " (finals week request). Dr. Dan will email you to confirm the time."
       : d.dateLabel + ", " + d.window + " (office hours)";
     const body = "Hi " + name + ",\n\nYou're signed up for your CHEM 3A exam retake.\n\n" +
