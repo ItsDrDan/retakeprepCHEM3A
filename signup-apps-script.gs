@@ -33,6 +33,7 @@ const HEADERS = ["Submitted", "Name", "Email", "Lab section", "Exam", "Date", "D
 // The attendance sheet must be shared (Viewer is enough) with the Google account that owns this script.
 const ATTENDANCE_SHEET_ID = "";   // set in the live script, not in the public repo
 const ATTENDANCE_GID = 1621423899;
+const DROP_DAYS = 30;   // no attendance scan in this many days = probably dropped
 
 function sheet_() {
   const ss = SHEET_ID ? SpreadsheetApp.openById(SHEET_ID) : SpreadsheetApp.getActiveSpreadsheet();
@@ -245,11 +246,22 @@ function buildRoster_(sh) {
       s.lastSeen ? Utilities.formatDate(s.lastSeen, tz, "M/d") : "", s.scans];
   });
   list.sort((a, b) => (a[0] ? 1 : 0) - (b[0] ? 1 : 0) || a[1].localeCompare(b[1]));
+  // Not seen in DROP_DAYS (and no sign-up) = probably dropped: listed separately, not counted
+  const cutoff = Date.now() - DROP_DAYS * 86400000;
+  const seen = {}; Object.values(students).forEach(s => { seen[s.last + ", " + s.first] = s.lastSeen; });
+  const isDropped = x => !x[0] && (!seen[x[1]] || seen[x[1]].getTime() < cutoff);
+  const dropped = list.filter(isDropped);
+  const active = list.filter(x => !isDropped(x));
+  list.length = 0; active.forEach(x => list.push(x));
   const done = list.filter(x => x[0]).length;
   const data = [["CHEM 3A Retake Roster", "", "", "", "", "", "", "", ""],
     ["Responded: " + done + " of " + list.length + "   |   Updated " + Utilities.formatDate(new Date(), tz, "EEE MMM d, h:mm a"), "", "", "", "", "", "", "", ""],
     ["", "", "", "", "", "", "", "", ""],
     ["Done", "Student", "Student ID", "Section (attendance form)", "Choice", "When", "Status", "Last attended", "Scans"]].concat(list);
+  if (dropped.length) {
+    data.push(["", "", "", "", "", "", "", "", ""], ["Probably dropped: no attendance in the last " + DROP_DAYS + " days (not counted above)", "", "", "", "", "", "", "", ""]);
+    dropped.forEach(x => data.push(x));
+  }
   const extra = subs.filter(r => !used.has(r));
   if (extra.length) {
     data.push(["", "", "", "", "", "", "", "", ""], ["Sign-ups not matched to the attendance sheet (check the name or ID)", "", "", "", "", "", "", "", ""]);
@@ -262,7 +274,11 @@ function buildRoster_(sh) {
   for (let i = 0; i < list.length; i++) {
     out.getRange(5 + i, 1, 1, 9).setBackground(list[i][0] ? "#e4f3ec" : "#fdedf0");
   }
-  if (extra.length) out.getRange(5 + list.length + 1, 1).setFontWeight("bold");
+  if (dropped.length) {
+    out.getRange(5 + list.length + 1, 1).setFontWeight("bold");
+    out.getRange(5 + list.length + 2, 1, dropped.length, 9).setFontColor("#8a90a3").setBackground("#f4f5f8");
+  }
+  if (extra.length) out.getRange(5 + list.length + (dropped.length ? dropped.length + 2 : 0) + 1, 1).setFontWeight("bold");
   out.setColumnWidth(1, 50); out.setColumnWidth(2, 200); out.setColumnWidth(3, 100); out.setColumnWidth(4, 170);
   out.setColumnWidth(5, 90); out.setColumnWidth(6, 230); out.setColumnWidth(7, 110); out.setColumnWidth(8, 100); out.setColumnWidth(9, 60);
 }
