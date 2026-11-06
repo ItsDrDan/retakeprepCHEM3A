@@ -13,7 +13,7 @@
  * Version: New version > Deploy. The URL stays the same.
  */
 
-const SEATS_BY_DAY = { 1: 8, 3: 8, 5: 30 }; // Mon, Wed, Fri seats (keep the same as CONFIG.seats in signup.html)
+const SEATS_BY_DAY = null; // null = no limit. To cap: { 1: 8, 3: 8, 5: 30 } (Mon, Wed, Fri; also set CONFIG.seats in signup.html)
 const SEND_STUDENT_EMAIL = true;  // emails each student a confirmation
 const NOTIFY_ME = "";             // your email to get a copy of each sign-up ("" = off)
 const SHEET_NAME = "Sign-Ups";
@@ -69,7 +69,7 @@ function doPost(e) {
     }
 
     const date = String(d.date || "");
-    if (date && !d.finals) {
+    if (SEATS_BY_DAY && date && !d.finals) {
       const c = counts_(sh);
       let mine = 0;
       if (rowIndex > 0) {
