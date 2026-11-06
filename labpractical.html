@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Lab Practical Sign-Up • CHEM 3A • ItsDrDan</title>
+<link rel="stylesheet" href="https://itsdrdan.github.io/games/brand/itsdrdan.css">
+<style>
+/* Lab practical uses a violet/orange scheme so it never looks like the (teal) retake form */
+:root{--bg:#f6f3fd;--surface:#fff;--ink:#241b3d;--muted:#564c70;--faint:#6b6385;--line:#e6e0f3;--line2:#d8cff0;--main:#6b3fd1;--main-d:#5530b0;--main-soft:#efe8fe;--main-line:#cdbcf6;--warm:#fff1e6;--warm-ink:#9a4a12;--warm-line:#f6cfae;--rose:#fdedf0;--rose-ink:#9c3346;--rose-line:#eab3bd;--mint:#e8f6ef;--mint-ink:#23704f;--r-lg:20px;--r-md:14px;--shadow:0 1px 2px #241b3d0d,0 6px 20px #241b3d0a;--font:Nunito,ui-sans-serif,system-ui,sans-serif;--font-display:Fredoka,Nunito,system-ui,sans-serif}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);line-height:1.45;font-size:16px}
+button,input,textarea{font:inherit;color:inherit}
+.hidden{display:none!important}
+.app{max-width:780px;margin:0 auto;padding:12px 12px 40px}
+.tb{display:flex;align-items:center;gap:14px;background:linear-gradient(135deg,#6b3fd1,#8e5cf0);color:#fff;border-radius:var(--r-lg);box-shadow:var(--shadow);padding:14px 18px}
+.tb .ic{font-size:44px;line-height:1;flex:none}
+.tb h1{font-family:var(--font-display);font-weight:600;font-size:clamp(22px,4vw,30px);margin:0;line-height:1.1}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.chip{display:inline-flex;border-radius:999px;padding:3px 10px;font-weight:800;font-size:12.5px;background:#ffffff26;color:#fff;border:1px solid #ffffff55}
+.notretake{margin:12px 0 0;padding:10px 14px;border-radius:var(--r-md);background:var(--warm);border:1px solid var(--warm-line);color:var(--warm-ink);font-weight:700;font-size:14.5px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow);padding:16px;margin-top:12px}
+.card h2{font-family:var(--font-display);font-weight:600;font-size:21px;margin:0 0 10px;display:flex;align-items:center;gap:10px}
+.num{width:30px;height:30px;border-radius:50%;background:var(--main);color:#fff;display:grid;place-items:center;font-size:16px;flex:none}
+label.f{display:block;font-weight:800;margin:10px 0 4px}
+.opt{font-weight:600;color:var(--faint);font-size:14px}
+input[type=text],input[type=email],textarea{width:100%;border:2px solid var(--line2);border-radius:12px;padding:12px 14px;background:#fff;min-height:50px}
+textarea{min-height:80px;resize:vertical}
+input:focus,textarea:focus{outline:none;border-color:var(--main);box-shadow:0 0 0 4px #6b3fd122}
+.picks{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px}
+.pick{position:relative}
+.pick input{position:absolute;opacity:0;pointer-events:none}
+.pick span{display:block;border:2px solid var(--line2);border-bottom-width:4px;border-radius:14px;padding:12px 14px;font-weight:800;cursor:pointer;background:#fff;min-height:56px;transition:.12s}
+.pick span small{display:block;font-weight:600;color:var(--faint);font-size:13px}
+.pick span b.big{font-family:var(--font-display);font-size:22px;font-weight:600}
+.pick span:hover{transform:translateY(-1px)}
+.pick input:checked+span{border-color:var(--main);background:var(--main-soft);color:var(--main-d)}
+.pick input:focus-visible+span{box-shadow:0 0 0 4px #6b3fd133}
+.pick input:disabled+span{opacity:.5;cursor:not-allowed;transform:none}
+.dayline{margin:0 0 10px;padding:10px 14px;border-radius:12px;background:var(--main-soft);border:1px solid var(--main-line);color:var(--main-d);font-weight:800}
+.ready{margin-top:12px;padding:12px 16px;border-radius:var(--r-md);background:var(--warm);border:1px solid var(--warm-line);color:var(--warm-ink)}
+.ready ul{margin:6px 0 0;padding-left:20px}.ready li{margin:2px 0;font-weight:700}
+.toggle{display:flex;gap:10px;align-items:flex-start;margin-top:14px;padding:12px 14px;border:2px dashed var(--line2);border-radius:14px;cursor:pointer;font-weight:800}
+.toggle input{width:22px;height:22px;margin:1px 0 0;accent-color:var(--main);flex:none}
+.conf{margin-top:10px;padding:12px 14px;border-radius:14px;background:var(--rose);border:1px solid var(--rose-line);color:var(--rose-ink);font-weight:700}
+.conf a{color:var(--rose-ink)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:999px;padding:14px 28px;font-weight:800;font-size:17px;cursor:pointer;min-height:54px;background:linear-gradient(180deg,#8e5cf0,var(--main));color:#fff;box-shadow:0 6px 16px #6b3fd144;text-decoration:none}
+.btn:disabled{opacity:.6;cursor:wait}
+.btn.ghost{background:#fff;color:var(--main-d);border:2px solid var(--main-line);box-shadow:none}
+.err{margin-top:12px;padding:12px 14px;border-radius:12px;background:var(--rose);border:1px solid var(--rose-line);color:var(--rose-ink);font-weight:800}
+.done{text-align:center}
+.done .ic{font-size:64px}
+.sum{text-align:left;margin:12px auto 0;max-width:520px;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.sum div{display:grid;grid-template-columns:130px 1fr;gap:10px;padding:9px 14px;border-top:1px solid var(--line)}
+.sum div:first-child{border-top:0}.sum dt{font-weight:800;color:var(--faint)}.sum dd{margin:0;font-weight:700}
+.note{font-size:14px;color:var(--muted);margin:6px 0 0}
+.foot{margin-top:18px;text-align:center;font-size:13px;color:var(--faint)}
+@media (max-width:520px){.sum div{grid-template-columns:1fr;gap:0}}
+</style></head>
+<body>
+<div class="app">
+
+<header class="tb">
+  <div class="ic" aria-hidden="true">🥽</div>
+  <div>
+    <h1>Lab Practical Sign-Up</h1>
+    <div class="chips"><span class="chip">CHEM 3A</span><span class="chip">Tuesday &amp; Thursday labs</span><span class="chip">NS-339</span></div>
+  </div>
+</header>
+<div class="notretake" id="notretake">This is the <b>Lab Practical</b> sign-up. It is <b>not</b> the exam retake form.</div>
+
+<form id="form" novalidate>
+  <section class="card">
+    <h2><span class="num">1</span>About you</h2>
+    <label class="f" for="name">Full name (as it shows in Canvas)</label>
+    <input type="text" id="name" autocomplete="name" required>
+    <label class="f" for="email">Student email</label>
+    <input type="email" id="email" autocomplete="email" placeholder="you@my.scccd.edu" required>
+    <label class="f" for="sid">Student ID #</label>
+    <input type="text" id="sid" inputmode="numeric" autocomplete="off" placeholder="Example: 1234567" required>
+  </section>
+
+  <section class="card">
+    <h2><span class="num">2</span>Your lab</h2>
+    <div class="picks" id="labs"></div>
+  </section>
+
+  <section class="card">
+    <h2><span class="num">3</span>Pick your start time</h2>
+    <p class="dayline" id="dayline">Pick your lab first.</p>
+    <div class="picks" id="times"></div>
+    <div class="ready">
+      <b>Be there 10 minutes early, ready to go:</b>
+      <ul>
+        <li>🥽 Goggles and lab coat ON</li>
+        <li>🧮 Calculator in your pocket</li>
+        <li>✏️ A pen and a pencil</li>
+      </ul>
+    </div>
+    <label class="toggle"><input type="checkbox" id="conflict"> <span>I have a schedule conflict with both times</span></label>
+    <div class="conf hidden" id="confBox">
+      Please email Dr. Dan as soon as possible: <a href="mailto:dk021@fresnocitycollege.edu?subject=Lab%20Practical%20schedule%20conflict">dk021@fresnocitycollege.edu</a>
+      <label class="f" for="notes" style="color:var(--ink)">Tell me about the conflict <span class="opt">(optional)</span></label>
+      <textarea id="notes" placeholder="Example: I work Tuesdays until 1 PM"></textarea>
+    </div>
+  </section>
+
+  <div class="err hidden" id="err" role="alert"></div>
+  <div style="text-align:center;margin-top:16px"><button class="btn" type="submit" id="submit">Sign Up</button></div>
+</form>
+
+<section class="card done hidden" id="done">
+  <div class="ic" aria-hidden="true">🧪</div>
+  <h2 style="justify-content:center;margin-top:6px" id="doneHead">You're signed up!</h2>
+  <p class="note" id="doneMsg"></p>
+  <dl class="sum" id="sum"></dl>
+  <div class="ready" id="doneReady" style="max-width:520px;margin:14px auto 0;text-align:left">
+    <b>Be there 10 minutes early, ready to go:</b>
+    <ul><li>🥽 Goggles and lab coat ON</li><li>🧮 Calculator in your pocket</li><li>✏️ A pen and a pencil</li></ul>
+  </div>
+  <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:16px">
+    <a class="btn" id="gcal" target="_blank" rel="noopener">Add to Google Calendar</a>
+  </div>
+  <p class="note" style="margin-top:14px">Need to change your time? Fill out the form again with the <b>same email</b>. Your newest sign-up replaces the old one.</p>
+</section>
+
+<p class="foot">Schedule conflict? Email Dr. Dan as soon as possible: dk021@fresnocitycollege.edu</p>
+</div>
+
+<script>
+/* ================= SETTINGS ================= */
+const CONFIG = {
+  scriptUrl: "https://script.google.com/macros/s/AKfycbxWn2CO8sy0_toiivnWhE_V3RcRdRz6d37CM1Yr2gGxv0NoyqwPNlB3voaWCai2UMPP/exec",
+  room: "NS-339",
+  labs: [
+    { id: "tue", label: "Tuesday 12 PM lab",  date: "2026-11-17", day: "Tuesday, November 17" },
+    { id: "thu", label: "Thursday 12 PM lab", date: "2026-11-19", day: "Thursday, November 19" }
+  ],
+  times: [
+    { start: "12:00", text: "12:00 PM", cap: 15 },
+    { start: "13:20", text: "1:20 PM",  cap: 15 }
+  ],
+  minutes: 80   // calendar event length
+};
+/* ============================================ */
+const $ = s => document.querySelector(s);
+let counts = {};
+const val = n => { const x = document.querySelector(`input[name="${n}"]:checked`); return x ? x.value : ""; };
+const lab = () => CONFIG.labs.find(l => l.id === val("lab"));
+const keyOf = (l, t) => "LP-" + l.date + "T" + t.start;
+$("#labs").innerHTML = CONFIG.labs.map(l => `<label class="pick"><input type="radio" name="lab" value="${l.id}"><span>${l.label}<small>Lab practical: ${l.day}</small></span></label>`).join("");
+
+function drawTimes(){
+  const l = lab();
+  $("#dayline").textContent = l ? "Your lab practical is " + l.day + " in " + CONFIG.room + "." : "Pick your lab first.";
+  const keep = val("time");
+  $("#times").innerHTML = CONFIG.times.map(t => {
+    const left = l ? t.cap - (counts[keyOf(l, t)] || 0) : t.cap;
+    const dis = !l || left <= 0;
+    return `<label class="pick"><input type="radio" name="time" value="${t.start}" ${dis ? "disabled" : ""} ${keep === t.start && !dis ? "checked" : ""}><span><b class="big">${t.text}</b><small>${!l ? "Pick your lab first" : left <= 0 ? "Full" : left + " of " + t.cap + " spots left"}</small></span></label>`;
+  }).join("");
+}
+$("#labs").addEventListener("change", drawTimes);
+$("#conflict").addEventListener("change", e => {
+  $("#confBox").classList.toggle("hidden", !e.target.checked);
+  if (e.target.checked) document.querySelectorAll('input[name="time"]').forEach(x => x.checked = false);
+});
+$("#times").addEventListener("change", () => { $("#conflict").checked = false; $("#confBox").classList.add("hidden"); });
+
+async function loadCounts(){
+  try { const j = await fetch(CONFIG.scriptUrl + "?form=labpractical").then(r => r.json()); counts = j.counts || {}; drawTimes(); } catch (e) {}
+}
+function fail(msg, el){ const e = $("#err"); e.textContent = msg; e.classList.remove("hidden"); (el || e).scrollIntoView({behavior:"smooth", block:"center"}); }
+
+$("#form").addEventListener("submit", async e => {
+  e.preventDefault(); $("#err").classList.add("hidden");
+  const l = lab(), t = CONFIG.times.find(x => x.start === val("time")), conflict = $("#conflict").checked;
+  const d = {
+    form: "labpractical",
+    name: $("#name").value.trim(), email: $("#email").value.trim().toLowerCase(), studentId: $("#sid").value.replace(/\D/g, ""),
+    lab: l ? l.label : "", date: l && t && !conflict ? keyOf(l, t) : "", day: l ? l.day : "", time: t && !conflict ? t.text : "",
+    room: CONFIG.room, conflict, notes: $("#notes").value.trim()
+  };
+  if (!d.name) return fail("Type your full name.", $("#name"));
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.email)) return fail("Type a working email so you get your confirmation.", $("#email"));
+  if (d.studentId.length < 5) return fail("Type your Student ID number.", $("#sid"));
+  if (!l) return fail("Tap your lab.", $("#labs"));
+  if (!t && !conflict) return fail("Tap a start time, or check \"I have a schedule conflict.\"", $("#times"));
+  const btn = $("#submit"); btn.disabled = true; btn.textContent = "Signing you up…";
+  try {
+    const j = await fetch(CONFIG.scriptUrl, { method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"}, body: JSON.stringify(d) }).then(r => r.json());
+    if (!j.ok) { if (j.counts) { counts = j.counts; drawTimes(); } throw new Error(j.error || "Something went wrong."); }
+    showDone(d, l, t);
+  } catch (err) {
+    fail((err.message || "Couldn't reach the sign-up sheet.") + " Try again, or email Dr. Dan.");
+  } finally { btn.disabled = false; btn.textContent = "Sign Up"; }
+});
+
+function showDone(d, l, t){
+  $("#form").classList.add("hidden"); $("#notretake").classList.add("hidden");
+  const rows = [["Name", d.name], ["Email", d.email], ["Student ID", d.studentId], ["Lab", d.lab],
+    ["Lab practical", d.conflict ? "Schedule conflict (email Dr. Dan)" : d.day + " at " + d.time + " in " + d.room]];
+  $("#sum").innerHTML = rows.map(() => `<div><dt></dt><dd></dd></div>`).join("");
+  [...$("#sum").children].forEach((row, i) => { row.children[0].textContent = rows[i][0]; row.children[1].textContent = rows[i][1]; });
+  if (d.conflict) {
+    $("#doneHead").textContent = "Got it";
+    $("#doneMsg").innerHTML = 'Please email Dr. Dan <b>as soon as possible</b> at <a href="mailto:dk021@fresnocitycollege.edu?subject=Lab%20Practical%20schedule%20conflict">dk021@fresnocitycollege.edu</a> so we can work it out.';
+    $("#gcal").classList.add("hidden"); $("#doneReady").classList.add("hidden");
+  } else {
+    $("#doneMsg").textContent = "A confirmation email is on its way. See you there 10 minutes early!";
+    const [hh, mm] = t.start.split(":").map(Number), s = hh * 60 + mm - 10, en = hh * 60 + mm + CONFIG.minutes;
+    const f = m => String(Math.floor(m / 60)).padStart(2, "0") + String(m % 60).padStart(2, "0") + "00", ymd = l.date.replace(/-/g, "");
+    $("#gcal").href = "https://calendar.google.com/calendar/render?action=TEMPLATE&text=" + encodeURIComponent("CHEM 3A Lab Practical") +
+      "&dates=" + ymd + "T" + f(s) + "/" + ymd + "T" + f(en) + "&ctz=America/Los_Angeles&location=" + encodeURIComponent("Fresno City College " + CONFIG.room) +
+      "&details=" + encodeURIComponent("Lab practical starts at " + t.text + ". Be there 10 minutes early with goggles and lab coat ON, calculator in your pocket, and a pen and pencil.");
+  }
+  $("#done").classList.remove("hidden"); window.scrollTo({top:0, behavior:"smooth"});
+}
+drawTimes(); loadCounts();
+</script>
+<script src="https://itsdrdan.github.io/games/brand/embed.js" defer></script>
+</body></html>

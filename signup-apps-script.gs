@@ -17,7 +17,7 @@ const SEATS_BY_DAY = null; // null = no limit. To cap: { 1: 8, 3: 8, 5: 30 } (Mo
 // Spot limits for single time slots (key = date + "T" + start time). Keep the same as the caps in signup.html.
 const SLOT_CAPS = { "2026-12-07T12:00": 5, "2026-12-07T16:00": 5, "2026-12-11T08:00": 10 };
 // Walk-in days (Study Hall Day): seats for the whole day; no 48-hour cutoff, never counted as late, no 72-hour email.
-const WALK_IN_DAYS = { "2026-11-17": 32 };
+const WALK_IN_DAYS = { "2026-11-24": 32 };
 const SEND_STUDENT_EMAIL = true;  // emails each student a confirmation
 const NOTIFY_ME = "";             // your email to get a copy of each sign-up ("" = off)
 // Sign-ups close MIN_HOURS before a time. A sign-up or change between MIN_HOURS and NOTICE_HOURS emails LATE_NOTICE_TO.
@@ -63,6 +63,7 @@ function json_(obj) {
 }
 
 function doGet(e) {
+  if (e && e.parameter && e.parameter.form === "labpractical") return json_({ ok: true, counts: labCounts_(labSheet_()) });
   return json_({ ok: true, counts: counts_(sheet_()) });
 }
 
@@ -71,6 +72,7 @@ function doPost(e) {
   lock.waitLock(20000);
   try {
     const d = JSON.parse(e.postData.contents);
+    if (d.form === "labpractical") return handleLab_(d);
     if (d.noRetake) { d.date = ""; d.request = false; d.noneWork = false; }
     const sid = String(d.studentId || "").replace(/\D/g, "").replace(/^0+/, "");
     const name = String(d.name || "").trim(), email = String(d.email || "").trim().toLowerCase();
@@ -281,4 +283,104 @@ function buildRoster_(sh) {
   if (extra.length) out.getRange(5 + list.length + (dropped.length ? dropped.length + 2 : 0) + 1, 1).setFontWeight("bold");
   out.setColumnWidth(1, 50); out.setColumnWidth(2, 200); out.setColumnWidth(3, 100); out.setColumnWidth(4, 170);
   out.setColumnWidth(5, 90); out.setColumnWidth(6, 230); out.setColumnWidth(7, 110); out.setColumnWidth(8, 100); out.setColumnWidth(9, 60);
+}
+
+// ===================== LAB PRACTICAL SIGN-UP (labpractical.html) =====================
+// Tuesday/Thursday lab students pick a start time; each time holds LAB_CAP students (half the lab).
+const LAB_TAB = "Lab Practical";
+const LAB_CAP = 15;
+const LAB_HEADERS = ["Submitted", "Name", "Email", "Student ID", "Lab", "Day", "Start time", "Slot", "Status", "Conflict notes"];
+
+function labSheet_() {
+  const ss = sheet_().getParent();
+  let sh = ss.getSheetByName(LAB_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(LAB_TAB);
+    sh.appendRow(LAB_HEADERS);
+    sh.setFrozenRows(1);
+    sh.getRange(1, 1, 1, LAB_HEADERS.length).setFontWeight("bold").setBackground("#efe8fe");
+  }
+  return sh;
+}
+
+function labCounts_(sh) {
+  const out = {};
+  sh.getDataRange().getValues().slice(1).forEach(r => {
+    const k = String(r[7] || "");
+    if (k && r[8] !== "Cancelled") out[k] = (out[k] || 0) + 1;
+  });
+  return out;
+}
+
+function handleLab_(d) {
+  const name = String(d.name || "").trim(), email = String(d.email || "").trim().toLowerCase();
+  const sid = String(d.studentId || "").replace(/\D/g, "").replace(/^0+/, "");
+  if (!name || !email) return json_({ ok: false, error: "Name and email are required." });
+  const sh = labSheet_();
+  const values = sh.getDataRange().getValues();
+  let rowIndex = -1;
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][2]).toLowerCase() === email || (sid && String(values[i][3]).replace(/\D/g, "").replace(/^0+/, "") === sid)) { rowIndex = i + 1; break; }
+  }
+  const slot = d.conflict ? "" : String(d.date || "");
+  if (slot) {
+    const c = labCounts_(sh);
+    const mine = rowIndex > 0 && String(values[rowIndex - 1][7]) === slot ? 1 : 0;
+    if ((c[slot] || 0) - mine >= LAB_CAP) return json_({ ok: false, error: "Sorry, that time just filled up. Pick the other time.", counts: c });
+  }
+  const row = [new Date(), name, email, sid ? "'" + sid : "", d.lab || "", d.day ? "'" + d.day : "", d.time ? "'" + d.time : "", slot,
+    d.conflict ? "Conflict" : "Booked", d.notes || ""];
+  if (rowIndex > 0) sh.getRange(rowIndex, 1, 1, row.length).setValues([row]);
+  else sh.appendRow(row);
+
+  const body = d.conflict
+    ? "Hi " + name + ",\n\nYou told us you have a schedule conflict with the CHEM 3A lab practical (" + (d.lab || "") + ").\n\n" +
+      "Please email Dr. Dan as soon as possible at dk021@fresnocitycollege.edu so you can work it out.\n\n- Dr. Dan"
+    : "Hi " + name + ",\n\nYou're signed up for the CHEM 3A lab practical.\n\n" +
+      "Lab: " + d.lab + "\nWhen: " + d.day + ", starting at " + d.time + "\nWhere: " + (d.room || "NS-339") + "\n\n" +
+      "Be there 10 minutes early, ready to go:\n  - Goggles and lab coat ON\n  - Calculator in your pocket\n  - A pen and a pencil\n\n" +
+      "Need to change your time? Fill out the lab practical form again with this same email.\n" +
+      "Schedule conflict? Email Dr. Dan as soon as possible at dk021@fresnocitycollege.edu.\n\n- Dr. Dan";
+  try { MailApp.sendEmail(email, "CHEM 3A lab practical sign-up", body); } catch (err) {}
+  if (d.conflict && LATE_NOTICE_TO) {
+    try { MailApp.sendEmail(LATE_NOTICE_TO, "Lab practical conflict: " + name,
+      name + " (" + (d.lab || "") + ", ID " + (sid || "-") + ", " + email + ") reported a schedule conflict.\n\nNotes: " + (d.notes || "-")); } catch (err) {}
+  }
+  try { buildLabSchedule_(sh); } catch (err) {}
+  return json_({ ok: true, counts: labCounts_(sh) });
+}
+
+// "Lab Practical Schedule" tab: who is in each start time, plus conflicts.
+function buildLabSchedule() { buildLabSchedule_(labSheet_()); }
+function buildLabSchedule_(sh) {
+  const ss = sh.getParent();
+  let out = ss.getSheetByName("Lab Practical Schedule");
+  if (!out) out = ss.insertSheet("Lab Practical Schedule");
+  out.clear();
+  const rows = sh.getDataRange().getValues().slice(1).filter(r => r[1] && r[8] !== "Cancelled");
+  const groups = {};
+  rows.forEach(r => {
+    const g = r[8] === "Conflict" ? "zz|Schedule conflicts (follow up)" : String(r[7]) + "|" + String(r[5]) + " at " + String(r[6]);
+    (groups[g] = groups[g] || []).push(r);
+  });
+  const data = [["CHEM 3A Lab Practical Schedule", "", "", ""],
+    ["Updated " + Utilities.formatDate(new Date(), "America/Los_Angeles", "EEE MMM d, h:mm a"), "", "", ""]];
+  const heads = [];
+  Object.keys(groups).sort().forEach(k => {
+    const list = groups[k].sort((a, b) => String(a[1]).localeCompare(String(b[1])));
+    const label = k.split("|")[1];
+    data.push(["", "", "", ""]);
+    heads.push(data.length + 1);
+    data.push([label + "   (" + list.length + (k.startsWith("zz") ? ")" : " of " + LAB_CAP + ")"), "", "", ""]);
+    data.push(["Name", "Student ID", "Email", "Notes"]);
+    list.forEach(r => data.push([r[1], r[3], r[2], r[9]]));
+  });
+  if (!rows.length) data.push(["No sign-ups yet.", "", "", ""]);
+  out.getRange(1, 1, data.length, 4).setValues(data);
+  out.getRange(1, 1).setFontSize(14).setFontWeight("bold");
+  heads.forEach(h => {
+    out.getRange(h, 1, 1, 4).setBackground("#6b3fd1").setFontColor("#ffffff").setFontWeight("bold");
+    out.getRange(h + 1, 1, 1, 4).setBackground("#efe8fe").setFontWeight("bold");
+  });
+  out.setColumnWidth(1, 220); out.setColumnWidth(2, 110); out.setColumnWidth(3, 240); out.setColumnWidth(4, 300);
 }
