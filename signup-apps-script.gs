@@ -88,7 +88,7 @@ function doPost(e) {
 
     const row = [new Date(), name, email, d.section || "", d.exam || "", date ? "'" + date : "", d.dateLabel || "",
       d.window || "", d.finals ? "Yes" : "", d.noneWork ? "Yes" : "", d.alternatives || "",
-      d.availability || "", d.notes || "", d.noneWork ? "Needs a time" : "Booked"];
+      d.availability || "", d.notes || "", d.noneWork ? "Needs a time" : d.request ? "Requested" : "Booked"];
 
     if (rowIndex > 0) sh.getRange(rowIndex, 1, 1, row.length).setValues([row]);
     else sh.appendRow(row);
@@ -96,7 +96,7 @@ function doPost(e) {
     const when = d.when ? d.when : d.noneWork ? "No listed time works. Dr. Dan will email you to set a time."
       : d.finals ? d.dateLabel + " (finals week request). Dr. Dan will email you to confirm the time."
       : d.dateLabel + ", " + d.window + " (office hours)";
-    const body = "Hi " + name + ",\n\nYou're signed up for your CHEM 3A exam retake.\n\n" +
+    const body = "Hi " + name + ",\n\n" + (d.request ? "Your CHEM 3A exam retake request is in." : "You're signed up for your CHEM 3A exam retake.") + "\n\n" +
       "Exam: " + d.exam + "\n" +
       "Lab section: " + d.section + "\n" +
       "When: " + when + "\n\n" +
@@ -104,10 +104,52 @@ function doPost(e) {
     if (SEND_STUDENT_EMAIL) { try { MailApp.sendEmail(email, "CHEM 3A exam retake sign-up", body); } catch (err) {} }
     if (NOTIFY_ME) { try { MailApp.sendEmail(NOTIFY_ME, "Retake sign-up: " + name, body + "\n\nNotes: " + (d.notes || "-") + "\nAvailability: " + (d.availability || "-")); } catch (err) {} }
 
+    try { buildSchedule_(sh); } catch (err) {}
     return json_({ ok: true, counts: counts_(sh) });
   } catch (err) {
     return json_({ ok: false, error: "Server error: " + err });
   } finally {
     lock.releaseLock();
   }
+}
+
+// Rebuilds the "Schedule" tab: every retake grouped by day and time, so you can see who is testing when.
+// Runs after each sign-up. You can also run it by hand: pick buildSchedule in the function menu and click Run.
+function buildSchedule() { buildSchedule_(sheet_()); }
+function buildSchedule_(sh) {
+  const ss = sh.getParent();
+  let out = ss.getSheetByName("Schedule");
+  if (!out) out = ss.insertSheet("Schedule", 0);
+  out.clear();
+  const rows = sh.getDataRange().getValues().slice(1).filter(r => r[1] && r[13] !== "Cancelled");
+  const keyOf = r => r[5] instanceof Date ? Utilities.formatDate(r[5], "America/Los_Angeles", "yyyy-MM-dd") : String(r[5] || "");
+  rows.sort((a, b) => (keyOf(a) || "9999").localeCompare(keyOf(b) || "9999") || String(a[1]).localeCompare(String(b[1])));
+  const data = [["CHEM 3A Exam Retake Schedule", "", "", "", "", "", ""],
+                ["Updated " + Utilities.formatDate(new Date(), "America/Los_Angeles", "EEE MMM d, h:mm a"), "", "", "", "", "", ""],
+                ["", "", "", "", "", "", ""]];
+  const heads = [];
+  let last = null;
+  rows.forEach(r => {
+    const k = keyOf(r);
+    const group = k ? (r[6] || k) + "  |  " + (r[7] || "") : "No listed time works (needs a time)";
+    if (group !== last) {
+      const n = rows.filter(x => (keyOf(x) ? (x[6] || keyOf(x)) + "  |  " + (x[7] || "") : "No listed time works (needs a time)") === group).length;
+      data.push(["", "", "", "", "", "", ""]);
+      heads.push(data.length + 1);
+      data.push([group + "   (" + n + (n === 1 ? " student)" : " students)"), "", "", "", "", "", ""]);
+      data.push(["Name", "Exam", "Lab section", "Status", "Email", "Notes / availability", "Signed up"]);
+      last = group;
+    }
+    data.push([r[1], r[4], r[3], r[13], r[2], [r[12], r[10], r[11]].filter(String).join(" | "),
+      r[0] instanceof Date ? Utilities.formatDate(r[0], "America/Los_Angeles", "M/d h:mm a") : r[0]]);
+  });
+  if (!rows.length) data.push(["No sign-ups yet.", "", "", "", "", "", ""]);
+  out.getRange(1, 1, data.length, 7).setValues(data);
+  out.getRange(1, 1).setFontSize(14).setFontWeight("bold");
+  out.getRange(2, 1).setFontColor("#646c82");
+  heads.forEach(h => {
+    out.getRange(h, 1, 1, 7).setBackground("#23776c").setFontColor("#ffffff").setFontWeight("bold");
+    out.getRange(h + 1, 1, 1, 7).setBackground("#e4f3ec").setFontWeight("bold");
+  });
+  out.setColumnWidths(1, 1, 200); out.setColumnWidths(2, 3, 150); out.setColumnWidth(5, 220); out.setColumnWidth(6, 260); out.setColumnWidth(7, 110);
 }

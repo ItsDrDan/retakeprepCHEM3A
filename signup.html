@@ -47,6 +47,8 @@ input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 
 .day .s{font-size:11.5px;font-weight:800;color:var(--mint-ink)}
 .day:hover:not(:disabled){transform:translateY(-2px)}
 .day.fin{background:var(--amber);border-color:var(--amber-line)}.day.fin .s{color:var(--amber-ink)}
+.day.req{background:var(--lav);border-color:#d9cff7}.day.req .s{color:#5b45a8}
+.chosen.req{background:var(--lav);border-color:#d9cff7;color:#5b45a8}
 .day.on{border-color:var(--c3A);background:var(--c3A);color:#fff}.day.on .m,.day.on .s{color:#fff}
 .day:disabled{cursor:default;background:#f1f2f7;border-color:#eceef5;color:#a3a9ba}.day:disabled .s,.day:disabled .m{color:#a3a9ba}
 .day.full .s{color:var(--rose-ink)}
@@ -108,6 +110,7 @@ input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 
     <h2><span class="num">3</span>Pick a day</h2>
     <div class="legend">
       <span><i style="background:#fff"></i>Office hours: Mon/Wed 2:00–3:50 PM (NS-303), Fri 12–2 PM (NS-127)</span>
+      <span><i style="background:var(--lav);border-color:#d9cff7"></i>By request</span>
       <span><i style="background:var(--amber);border-color:var(--amber-line)"></i>Finals week (set times)</span>
       <span><i style="background:#f1f2f7;border-color:#eceef5"></i>Not available</span>
     </div>
@@ -162,7 +165,14 @@ const CONFIG = {
   firstDay: "2026-11-16",
   lastDay:  "2026-12-04",
   days: [1, 3, 5],                      // Mon, Wed, Fri
-  closed: { "2026-11-27": "Holiday" },  // campus closed (Thanksgiving in-lieu day)
+  closed: { "2026-11-26": "Holiday", "2026-11-27": "Holiday" },  // Thanksgiving + in-lieu day
+  // Extra times outside office hours. request: true = Dr. Dan confirms by email.
+  extra: [
+    { date: "2026-11-17", start: "12:00", end: "14:50", text: "12:00–2:50 PM", room: "NS-339", only: ["sat8","sat11"], request: true },
+    { date: "2026-11-19", start: "12:00", end: "14:50", text: "12:00–2:50 PM", room: "NS-339", only: ["sat8","sat11"], request: true },
+    { date: "2026-12-01", start: "15:00", end: "16:00", text: "3:00 PM",       room: "NS-303", request: true },
+    { date: "2026-12-03", start: "15:00", end: "16:00", text: "3:00 PM",       room: "NS-303", request: true }
+  ],
   // Finals week retake times. cap = spots (leave out for no limit). only / except = lab section ids.
   // Keep caps the same as SLOT_CAPS in the Apps Script.
   finals: { start: "2026-12-07", end: "2026-12-11", slots: [
@@ -216,6 +226,7 @@ function slotsFor(s){
     const h = CONFIG.hours[dow];
     out.push({ ...h, date: s, key: s, cap: CONFIG.seats ? CONFIG.seats[dow] : null, kind: "office hours" });
   }
+  CONFIG.extra.filter(x => x.date === s).forEach(x => out.push({ ...x, key: s + "T" + x.start, kind: x.request ? "by request" : "extra time" }));
   CONFIG.finals.slots.filter(x => x.date === s).forEach(x => out.push({ ...x, key: s + "T" + x.start, kind: "finals week" }));
   return out;
 }
@@ -245,8 +256,9 @@ function drawCal(){
       else if (s < today) { label = "Past"; dis = true; }
       else if (!sl.length) { label = "—"; dis = true; }
       else if (!open.length) { label = sl.some(x => !allowed(x)) ? "Not your lab" : "Full"; dis = true; cls += " full"; }
-      else label = sl.length === 1 ? sl[0].room : open.length + (open.length === 1 ? " time" : " times");
+      else label = sl.length === 1 ? (sl[0].request ? "Request" : sl[0].room) : open.length + (open.length === 1 ? " time" : " times");
       if (isFinals(s) && sl.length) cls += " fin";
+      else if (sl.length && sl.every(x => x.request)) cls += " req";
       if (s === chosenDay) cls += " on";
       h += `<button type="button" class="${cls}" data-d="${s}" ${dis?"disabled":""} aria-label="${nice(s)}: ${label}"><span class="m">${MON[d.getMonth()]}</span><b>${d.getDate()}</b><span class="s">${label}</span></button>`;
     }
@@ -255,11 +267,11 @@ function drawCal(){
 }
 function drawSlots(){
   const box = $("#slotBox"), sl = chosenDay ? slotsFor(chosenDay) : [];
-  if (sl.length < 2 && !(sl.length && isFinals(chosenDay))) { box.classList.add("hidden"); return; }
+  if (sl.length < 2 && !(sl.length && (isFinals(chosenDay) || sl[0].request))) { box.classList.add("hidden"); return; }
   $("#slotHead").textContent = "Pick a time on " + nice(chosenDay);
   $("#slotPick").innerHTML = sl.map(x => {
     const ok = allowed(x), l = left(x), dis = !ok || l <= 0;
-    const sub = [x.room, ruleTxt(x), x.cap ? (l <= 0 ? "Full" : l + " of " + x.cap + " spots left") : ""].filter(Boolean).join(" · ");
+    const sub = [x.room, x.request ? "By request" : "", ruleTxt(x), x.cap ? (l <= 0 ? "Full" : l + " of " + x.cap + " spots left") : ""].filter(Boolean).join(" · ");
     return `<label class="pick"><input type="radio" name="slot" value="${x.key}" ${dis?"disabled":""} ${x.key===chosen?"checked":""}><span>${x.text}<small>${sub}</small></span></label>`;
   }).join("");
   box.classList.remove("hidden");
@@ -281,8 +293,8 @@ $("#sections").addEventListener("change", () => {
 function showChosen(){
   const c = $("#chosen"), sl = findSlot(chosen);
   if (!sl) return c.classList.add("hidden");
-  c.className = "chosen" + (isFinals(sl.date) ? " fin" : "");
-  c.textContent = `You picked ${nice(sl.date)}, ${sl.text} in ${sl.room} (${sl.kind}).`;
+  c.className = "chosen" + (sl.request ? " req" : isFinals(sl.date) ? " fin" : "");
+  c.textContent = `You picked ${nice(sl.date)}, ${sl.text} in ${sl.room} (${sl.kind}).` + (sl.request ? " I'll email you to confirm." : "");
 }
 $("#noneWork").addEventListener("change", e => {
   $("#altBox").classList.toggle("hidden", !e.target.checked);
@@ -305,9 +317,9 @@ $("#form").addEventListener("submit", async e => {
   const data = {
     name: $("#name").value.trim(), email: $("#email").value.trim().toLowerCase(),
     section: labelOf(CONFIG.sections, val("section")), exam: val("exam"),
-    date: sl ? sl.key : "", dateLabel: sl ? nice(sl.date) : "", finals: false,
+    date: sl ? sl.key : "", dateLabel: sl ? nice(sl.date) : "", finals: false, request: !!(sl && sl.request),
     window: sl ? sl.text + " in " + sl.room : "",
-    when: sl ? nice(sl.date) + ", " + sl.text + " in " + sl.room + " (" + sl.kind + ")" : "",
+    when: sl ? nice(sl.date) + ", " + sl.text + " in " + sl.room + (sl.request ? " (by request). Dr. Dan will email you to confirm." : " (" + sl.kind + ")") : "",
     noneWork: none, alternatives: alts.map(a=>labelOf(CONFIG.alternatives,a)).join("; "),
     availability: $("#avail").value.trim(), notes: $("#notes").value.trim()
   };
@@ -334,15 +346,15 @@ $("#form").addEventListener("submit", async e => {
 
 function showDone(d, sl){
   $("#form").classList.add("hidden"); $("#how").classList.add("hidden");
-  const when = d.noneWork ? "No listed time works (I'll email you)" : nice(sl.date) + ", " + sl.text + " in " + sl.room;
+  const when = d.noneWork ? "No listed time works (I'll email you)" : nice(sl.date) + ", " + sl.text + " in " + sl.room + (sl.request ? " (request)" : "");
   const rows = [["Name",d.name],["Email",d.email],["Lab section",d.section],["Exam",d.exam],["When",when]];
   if (d.noneWork && d.alternatives) rows.push(["Options",d.alternatives]);
   if (d.availability) rows.push(["Availability",d.availability]);
   $("#sum").innerHTML = rows.map(([k,v])=>`<div><dt>${k}</dt><dd></dd></div>`).join("");
   [...$("#sum").querySelectorAll("dd")].forEach((dd,i)=>dd.textContent = rows[i][1]);
-  $("#doneMsg").textContent = d.noneWork ? "Your request is in. I'll email you to set a time." : "See you then. Bring a pencil and your calculator.";
+  $("#doneMsg").textContent = d.noneWork ? "Your request is in. I'll email you to set a time." : sl.request ? "Your request is in. I'll email you to confirm before you come in." : "See you then. Bring a pencil and your calculator.";
   const g = $("#gcal");
-  if (sl){
+  if (sl && !sl.request){
     const ymd = sl.date.replace(/-/g,""), st = sl.start.replace(":","")+"00", en = sl.end.replace(":","")+"00";
     g.href = "https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent("CHEM 3A "+d.exam+" retake")+"&dates="+ymd+"T"+st+"/"+ymd+"T"+en+"&ctz=America/Los_Angeles&location="+encodeURIComponent("Fresno City College "+sl.room)+"&details="+encodeURIComponent("CHEM 3A exam retake with Dr. Dan. Bring a pencil and calculator.");
   } else g.classList.add("hidden");
