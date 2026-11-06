@@ -172,7 +172,11 @@ const CONFIG = {
   closed: { "2026-11-26": "Holiday", "2026-11-27": "Holiday" },  // Thanksgiving + in-lieu day
   // Extra times outside office hours. request: true = Dr. Dan confirms by email.
   extra: [
-    { date: "2026-11-17", start: "12:00", end: "14:50", text: "12:00–2:50 PM", room: "NS-339", only: ["sat8","sat11"], request: true },
+    // Study Hall Day: open to everyone, can sign up the same day, 32 seats for the whole day
+    { date: "2026-11-17", start: "12:00", end: "13:00", text: "12:00–1:00 PM", room: "NS-339", exam: "Exam 1", walkIn: true, dayCap: 32, label: "Study Hall Day" },
+    { date: "2026-11-17", start: "13:00", end: "14:00", text: "1:00–2:00 PM",  room: "NS-339", exam: "Exam 1", walkIn: true, dayCap: 32, label: "Study Hall Day" },
+    { date: "2026-11-17", start: "12:00", end: "13:30", text: "12:00–1:30 PM", room: "NS-339", exam: "Exam 2", walkIn: true, dayCap: 32, label: "Study Hall Day" },
+    { date: "2026-11-17", start: "13:20", end: "14:50", text: "1:20–2:50 PM",  room: "NS-339", exam: "Exam 2", walkIn: true, dayCap: 32, label: "Study Hall Day" },
     { date: "2026-11-19", start: "12:00", end: "14:50", text: "12:00–2:50 PM", room: "NS-339", only: ["sat8","sat11"], request: true },
     { date: "2026-12-01", start: "15:00", end: "16:00", text: "3:00 PM",       room: "NS-303", request: true },
     { date: "2026-12-03", start: "15:00", end: "16:00", text: "3:00 PM",       room: "NS-303", request: true }
@@ -230,7 +234,7 @@ function slotsFor(s){
     const h = CONFIG.hours[dow];
     out.push({ ...h, date: s, key: s, cap: CONFIG.seats ? CONFIG.seats[dow] : null, kind: "office hours" });
   }
-  CONFIG.extra.filter(x => x.date === s).forEach(x => out.push({ ...x, key: s + "T" + x.start, kind: x.request ? "by request" : "extra time" }));
+  CONFIG.extra.filter(x => x.date === s).forEach(x => out.push({ ...x, key: s + "T" + x.start + (x.exam ? "-E" + x.exam.slice(-1) : ""), kind: x.label || (x.request ? "by request" : "extra time") }));
   CONFIG.finals.slots.filter(x => x.date === s).forEach(x => out.push({ ...x, key: s + "T" + x.start, kind: "finals week" }));
   return out;
 }
@@ -241,13 +245,19 @@ function allowed(sl){
   if (sl.except && sl.except.includes(sec)) return false;
   return true;
 }
-const left = sl => sl.cap ? sl.cap - (counts[sl.key] || 0) : Infinity;
+function examOk(sl){ const ex = val("exam"); return !sl.exam || !ex || sl.exam === ex;
+}
+const dayUsed = d => Object.keys(counts).filter(k => k.length > 10 && k.slice(0,10) === d).reduce((a,k) => a + counts[k], 0);
+const left = sl => Math.min(sl.cap ? sl.cap - (counts[sl.key] || 0) : Infinity, sl.dayCap ? sl.dayCap - dayUsed(sl.date) : Infinity);
 const DEADLINE = new Date(2026, 10, 15, 23, 59, 59);   // sign-ups close Sun Nov 15, 11:59 PM
 const pastDeadline = () => Date.now() > DEADLINE;
 const CLOSE_HOURS = 48;   // sign-ups close this many hours before a time starts
 const startOf = sl => { const [y,m,d] = sl.date.split("-").map(Number), [hh,mm] = sl.start.split(":").map(Number); return new Date(y, m-1, d, hh, mm); };
-const tooSoon = sl => (startOf(sl) - Date.now()) / 3600000 < CLOSE_HOURS;
-const openSlot = sl => allowed(sl) && left(sl) > 0 && !tooSoon(sl);
+const endOf = sl => { const [y,m,d] = sl.date.split("-").map(Number), [hh,mm] = sl.end.split(":").map(Number); return new Date(y, m-1, d, hh, mm); };
+// walkIn slots (Study Hall Day) can be booked up until they start (same day is fine) and are never "late"
+const tooSoon = sl => sl.walkIn ? startOf(sl) <= Date.now() : (startOf(sl) - Date.now()) / 3600000 < CLOSE_HOURS;
+const lateFor = sl => pastDeadline() && !(sl && sl.walkIn);
+const openSlot = sl => allowed(sl) && examOk(sl) && left(sl) > 0 && !tooSoon(sl);
 const ruleTxt = sl => sl.only ? "Saturday lab students only" : sl.except && sl.except.join() === SAT.join() ? "Not for Saturday labs (your final is then)" : "";
 
 function drawCal(){
@@ -265,8 +275,8 @@ function drawCal(){
       if (CONFIG.closed[s]) { label = CONFIG.closed[s]; dis = true; }
       else if (s < today) { label = "Past"; dis = true; }
       else if (!sl.length) { label = "—"; dis = true; }
-      else if (!open.length) { label = sl.every(tooSoon) ? "Closed" : sl.some(x => !allowed(x)) ? "Not your lab" : "Full"; dis = true; cls += " full"; }
-      else label = sl.length === 1 ? (sl[0].request ? "Request" : sl[0].room) : open.length + (open.length === 1 ? " time" : " times");
+      else if (!open.length) { label = sl.every(tooSoon) ? "Closed" : sl.some(x => !allowed(x)) ? "Not your lab" : sl.some(x => !examOk(x)) ? "Other exam" : "Full"; dis = true; cls += " full"; }
+      else label = sl[0].walkIn ? "Study Hall" : sl.length === 1 ? (sl[0].request ? "Request" : sl[0].room) : open.length + (open.length === 1 ? " time" : " times");
       if (isFinals(s) && sl.length) cls += " fin";
       else if (sl.length && sl.every(x => x.request)) cls += " req";
       if (s === chosenDay) cls += " on";
@@ -280,8 +290,8 @@ function drawSlots(){
   if (sl.length < 2 && !(sl.length && (isFinals(chosenDay) || sl[0].request))) { box.classList.add("hidden"); return; }
   $("#slotHead").textContent = "Pick a time on " + nice(chosenDay);
   $("#slotPick").innerHTML = sl.map(x => {
-    const ok = allowed(x), l = left(x), soon = tooSoon(x), dis = !ok || l <= 0 || soon;
-    const sub = [x.room, x.request ? "By request" : "", ruleTxt(x), soon ? "Closed (less than 48 hours away)" : x.cap ? (l <= 0 ? "Full" : l + " of " + x.cap + " spots left") : ""].filter(Boolean).join(" · ");
+    const ok = allowed(x) && examOk(x), l = left(x), soon = tooSoon(x), dis = !ok || l <= 0 || soon;
+    const sub = [x.room, x.exam ? x.exam + " only" : "", x.request ? "By request" : "", ruleTxt(x), soon ? (x.walkIn ? "Already started" : "Closed (less than 48 hours away)") : x.cap ? (l <= 0 ? "Full" : l + " of " + x.cap + " spots left") : x.dayCap ? (l <= 0 ? "Full" : l + " of " + x.dayCap + " seats left today") : ""].filter(Boolean).join(" · ");
     return `<label class="pick"><input type="radio" name="slot" value="${x.key}" ${dis?"disabled":""} ${x.key===chosen?"checked":""}><span>${x.text}<small>${sub}</small></span></label>`;
   }).join("");
   box.classList.remove("hidden");
@@ -295,6 +305,7 @@ $("#cal").addEventListener("click", e => {
   if (!chosen) $("#slotBox").scrollIntoView({behavior:"smooth",block:"center"});
 });
 $("#slotPick").addEventListener("change", e => { if (e.target.name === "slot") { chosen = e.target.value; showChosen(); } });
+$("#exams").addEventListener("change", () => $("#sections").dispatchEvent(new Event("change")));
 $("#sections").addEventListener("change", () => {
   const sl = findSlot(chosen); if (sl && !openSlot(sl)) chosen = null;
   if (chosenDay && !slotsFor(chosenDay).some(openSlot)) chosenDay = null;
@@ -304,7 +315,8 @@ function showChosen(){
   const c = $("#chosen"), sl = findSlot(chosen);
   if (!sl) return c.classList.add("hidden");
   c.className = "chosen" + (sl.request ? " req" : isFinals(sl.date) ? " fin" : "");
-  c.textContent = `You picked ${nice(sl.date)}, ${sl.text} in ${sl.room} (${sl.kind}).` + (pastDeadline() ? " Late request: not guaranteed. I'll email you if I can fit you in." : sl.request ? " I'll email you to confirm." : "");
+  c.textContent = `You picked ${nice(sl.date)}, ${sl.text} in ${sl.room} (${sl.kind}).` + (lateFor(sl) ? " Late request: not guaranteed. I'll email you if I can't fit you in." : sl.request ? " I'll email you to confirm." : "");
+  $("#submit").textContent = lateFor(sl) ? "Send Late Request" : "Sign Up";
 }
 $("#noneWork").addEventListener("change", e => {
   $("#altBox").classList.toggle("hidden", !e.target.checked);
@@ -328,9 +340,9 @@ $("#form").addEventListener("submit", async e => {
   const data = {
     name: $("#name").value.trim(), email: $("#email").value.trim().toLowerCase(),
     section: labelOf(CONFIG.sections, val("section")), exam: val("exam"),
-    date: sl ? sl.key : "", start: sl ? sl.start : "", dateLabel: sl ? nice(sl.date) : "", finals: false, request: !!(sl && sl.request) || pastDeadline(), late: pastDeadline(),
+    date: sl ? sl.key : "", start: sl ? sl.start : "", dateLabel: sl ? nice(sl.date) : "", finals: false, request: !!(sl && sl.request) || lateFor(sl), late: lateFor(sl), walkIn: !!(sl && sl.walkIn),
     window: sl ? sl.text + " in " + sl.room : "",
-    when: sl ? nice(sl.date) + ", " + sl.text + " in " + sl.room + (pastDeadline() ? " (late request, not guaranteed). Dr. Dan will email you if he can fit you in." : sl.request ? " (by request). Dr. Dan will email you to confirm." : " (" + sl.kind + ")")
+    when: sl ? nice(sl.date) + ", " + sl.text + " in " + sl.room + (lateFor(sl) ? " (late request, not guaranteed). Dr. Dan will email you if he can't fit you in." : sl.request ? " (by request). Dr. Dan will email you to confirm." : " (" + sl.kind + ")")
       + "\n\nPlease arrive at the START of this time so you get the full " + examMins(val("exam")) + " minutes for " + val("exam") + ". If you come late, you get less time." : "",
     noneWork: none, alternatives: alts.map(a=>labelOf(CONFIG.alternatives,a)).join("; "),
     availability: $("#avail").value.trim(), notes: $("#notes").value.trim()
@@ -340,7 +352,8 @@ $("#form").addEventListener("submit", async e => {
   if (!val("section")) return fail("Tap your lab section.", $("#sections"));
   if (!data.exam) return fail("Tap which exam you're retaking.", $("#exams"));
   if (!none && !sl) return chosenDay ? fail("Pick a time for " + nice(chosenDay) + ".", $("#slotBox")) : fail("Tap a day on the calendar, or check \"None of these times work for me.\"", $("#cal"));
-  if (sl && tooSoon(sl)) return fail("Sign-ups close 48 hours before each time. Pick a later day.", $("#cal"));
+  if (sl && tooSoon(sl)) return fail(sl.walkIn ? "That time has already started. Pick a later time." : "Sign-ups close 48 hours before each time. Pick a later day.", $("#cal"));
+  if (sl && !examOk(sl)) return fail("That time is for " + sl.exam + ". Pick a time for " + data.exam + ".", $("#slotBox"));
   if (sl && !allowed(sl)) return fail("That time isn't open to your lab section. Pick another time.", $("#slotBox"));
   if (none && !alts.length && !data.availability) return fail("Pick an option or type when you're available.", $("#altBox"));
 
@@ -354,7 +367,7 @@ $("#form").addEventListener("submit", async e => {
     showDone(data, sl);
   } catch(err) {
     fail((err.message || "Couldn't reach the sign-up sheet.") + " Try again, or message Dr. Dan in Canvas.");
-  } finally { btn.disabled = false; btn.textContent = pastDeadline() ? "Send Late Request" : "Sign Up"; }
+  } finally { btn.disabled = false; btn.textContent = lateFor(findSlot(chosen)) ? "Send Late Request" : "Sign Up"; }
 });
 
 function showDone(d, sl){
@@ -367,7 +380,7 @@ function showDone(d, sl){
   [...$("#sum").querySelectorAll("dd")].forEach((dd,i)=>dd.textContent = rows[i][1]);
   if (d.late) $("#doneHead").textContent = "Request sent";
   const arrive = " Please arrive at the start of your time so you get the full " + examMins(d.exam) + " minutes for " + d.exam + ".";
-  $("#doneMsg").textContent = d.late ? "Your late request is in. It is not guaranteed; I'll email you if I can fit you in." + arrive : d.noneWork ? "Your request is in. I'll email you to set a time." + arrive : sl.request ? "Your request is in. I'll email you to confirm before you come in." + arrive : "See you then. Bring a pencil and your calculator." + arrive;
+  $("#doneMsg").textContent = d.late ? "Your late request is in. It is not guaranteed; I'll email you if I can't fit you in." + arrive : d.noneWork ? "Your request is in. I'll email you to set a time." + arrive : sl.request ? "Your request is in. I'll email you to confirm before you come in." + arrive : "See you then. Bring a pencil and your calculator." + arrive;
   const g = $("#gcal");
   if (sl && !sl.request && !d.late){
     const [hh, mm] = sl.start.split(":").map(Number), endMin = hh*60 + mm + examMins(d.exam);
@@ -377,7 +390,7 @@ function showDone(d, sl){
   $("#done").classList.remove("hidden"); window.scrollTo({top:0,behavior:"smooth"});
 }
 
-if (pastDeadline()) { $("#deadline").innerHTML = "<b>The sign-up deadline (November 15) has passed.</b> You can still send a request, but it is not guaranteed. I'll email you if I can fit you in."; $("#submit").textContent = "Send Late Request"; }
+if (pastDeadline()) { $("#deadline").innerHTML = "<b>The sign-up deadline (November 15) has passed.</b> You can still send a request, but it is not guaranteed. I'll email you if I can't fit you in."; $("#submit").textContent = "Send Late Request"; }
 drawCal(); loadCounts();
 </script>
 <script src="https://itsdrdan.github.io/games/brand/embed.js" defer></script>

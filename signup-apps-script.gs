@@ -16,6 +16,8 @@
 const SEATS_BY_DAY = null; // null = no limit. To cap: { 1: 8, 3: 8, 5: 30 } (Mon, Wed, Fri; also set CONFIG.seats in signup.html)
 // Spot limits for single time slots (key = date + "T" + start time). Keep the same as the caps in signup.html.
 const SLOT_CAPS = { "2026-12-07T12:00": 5, "2026-12-07T16:00": 5, "2026-12-11T08:00": 10 };
+// Walk-in days (Study Hall Day): seats for the whole day; no 48-hour cutoff, never counted as late, no 72-hour email.
+const WALK_IN_DAYS = { "2026-11-17": 32 };
 const SEND_STUDENT_EMAIL = true;  // emails each student a confirmation
 const NOTIFY_ME = "";             // your email to get a copy of each sign-up ("" = off)
 // Sign-ups close MIN_HOURS before a time. A sign-up or change between MIN_HOURS and NOTICE_HOURS emails LATE_NOTICE_TO.
@@ -75,25 +77,29 @@ function doPost(e) {
     }
 
     const date = String(d.date || "");
-    const late = Date.now() > DEADLINE.getTime();   // after the deadline: still accepted, as a request that isn't guaranteed
+    const walkIn = date.length > 10 && !!WALK_IN_DAYS[date.slice(0, 10)];
+    const late = Date.now() > DEADLINE.getTime() && !walkIn;   // after the deadline: still accepted, as a request that isn't guaranteed
     if (late) d.request = true;
     let hoursAway = null;
     if (date) {
       const startAt = Utilities.parseDate(date.slice(0, 10) + " " + (d.start || "00:00"), "America/Los_Angeles", "yyyy-MM-dd HH:mm");
       hoursAway = (startAt.getTime() - Date.now()) / 3600000;
-      if (hoursAway < MIN_HOURS) return json_({ ok: false, error: "Sign-ups close 48 hours before each time. Pick a later day." });
+      if (walkIn && hoursAway < 0) return json_({ ok: false, error: "That time has already started. Pick a later time." });
+      if (hoursAway < MIN_HOURS && !walkIn) return json_({ ok: false, error: "Sign-ups close 48 hours before each time. Pick a later day." });
     }
     const p = date.slice(0, 10).split("-").map(Number), dow = new Date(p[0], p[1] - 1, p[2]).getDay();
-    const cap = SLOT_CAPS[date] || (SEATS_BY_DAY && date.length === 10 ? SEATS_BY_DAY[dow] : 0);
+    const cap = SLOT_CAPS[date] || (walkIn ? WALK_IN_DAYS[date.slice(0, 10)] : 0) || (SEATS_BY_DAY && date.length === 10 ? SEATS_BY_DAY[dow] : 0);
+    const same = k => walkIn ? k.length > 10 && k.slice(0, 10) === date.slice(0, 10) : k === date;
     if (cap) {
       const c = counts_(sh);
       let mine = 0;
       if (rowIndex > 0) {
         const old = values[rowIndex - 1][5];
         const oldDate = old instanceof Date ? Utilities.formatDate(old, "America/Los_Angeles", "yyyy-MM-dd") : String(old);
-        if (oldDate === date) mine = 1;
+        if (same(oldDate)) mine = 1;
       }
-      if ((c[date] || 0) - mine >= cap) {
+      const used = Object.keys(c).filter(same).reduce((a, k) => a + c[k], 0);
+      if (used - mine >= cap) {
         return json_({ ok: false, error: "Sorry, that time just filled up. Pick another time.", counts: c });
       }
     }
@@ -108,7 +114,7 @@ function doPost(e) {
     const when = d.when ? d.when : d.noneWork ? "No listed time works. Dr. Dan will email you to set a time."
       : d.finals ? d.dateLabel + " (finals week request). Dr. Dan will email you to confirm the time."
       : d.dateLabel + ", " + d.window + " (office hours)";
-    const body = "Hi " + name + ",\n\n" + (late ? "Your late CHEM 3A exam retake request is in. The sign-up deadline was November 15, so this time is not guaranteed. Dr. Dan will email you if he can fit you in." : d.request ? "Your CHEM 3A exam retake request is in." : "You're signed up for your CHEM 3A exam retake.") + "\n\n" +
+    const body = "Hi " + name + ",\n\n" + (late ? "Your late CHEM 3A exam retake request is in. The sign-up deadline was November 15, so this time is not guaranteed. Dr. Dan will email you if he can't fit you in." : d.request ? "Your CHEM 3A exam retake request is in." : "You're signed up for your CHEM 3A exam retake.") + "\n\n" +
       "Exam: " + d.exam + "\n" +
       "Lab section: " + d.section + "\n" +
       "When: " + when + "\n\n" +
@@ -116,7 +122,7 @@ function doPost(e) {
     if (SEND_STUDENT_EMAIL) { try { MailApp.sendEmail(email, "CHEM 3A exam retake sign-up", body); } catch (err) {} }
     if (NOTIFY_ME) { try { MailApp.sendEmail(NOTIFY_ME, "Retake sign-up: " + name, body + "\n\nNotes: " + (d.notes || "-") + "\nAvailability: " + (d.availability || "-")); } catch (err) {} }
 
-    const soon = hoursAway !== null && hoursAway < NOTICE_HOURS;
+    const soon = hoursAway !== null && hoursAway < NOTICE_HOURS && !walkIn;
     if (LATE_NOTICE_TO && (soon || late)) {
       const what = (rowIndex > 0 ? "changed their retake time" : "signed up") + (late ? " AFTER the Nov 15 deadline (late request)" : "");
       try { MailApp.sendEmail(LATE_NOTICE_TO, (late ? "Late retake request: " : "Retake within 72 hours: ") + name,
