@@ -86,7 +86,7 @@ function doPost(e) {
       }
     }
 
-    const row = [new Date(), name, email, d.section || "", d.exam || "", date ? "'" + date : "", d.dateLabel || "",
+    const row = [new Date(), name, email, d.section || "", d.exam || "", date ? "'" + date : "", d.dateLabel ? "'" + d.dateLabel : "",
       d.window || "", d.finals ? "Yes" : "", d.noneWork ? "Yes" : "", d.alternatives || "",
       d.availability || "", d.notes || "", d.noneWork ? "Needs a time" : d.request ? "Requested" : "Booked"];
 
@@ -123,6 +123,7 @@ function buildSchedule_(sh) {
   out.clear();
   const rows = sh.getDataRange().getValues().slice(1).filter(r => r[1] && r[13] !== "Cancelled");
   const keyOf = r => r[5] instanceof Date ? Utilities.formatDate(r[5], "America/Los_Angeles", "yyyy-MM-dd") : String(r[5] || "");
+  const dayOf = r => r[6] instanceof Date ? Utilities.formatDate(r[6], "America/Los_Angeles", "EEEE, MMM d") : String(r[6] || keyOf(r));
   rows.sort((a, b) => (keyOf(a) || "9999").localeCompare(keyOf(b) || "9999") || String(a[1]).localeCompare(String(b[1])));
   const data = [["CHEM 3A Exam Retake Schedule", "", "", "", "", "", ""],
                 ["Updated " + Utilities.formatDate(new Date(), "America/Los_Angeles", "EEE MMM d, h:mm a"), "", "", "", "", "", ""],
@@ -131,9 +132,9 @@ function buildSchedule_(sh) {
   let last = null;
   rows.forEach(r => {
     const k = keyOf(r);
-    const group = k ? (r[6] || k) + "  |  " + (r[7] || "") : "No listed time works (needs a time)";
+    const group = k ? dayOf(r) + "  |  " + (r[7] || "") : "No listed time works (needs a time)";
     if (group !== last) {
-      const n = rows.filter(x => (keyOf(x) ? (x[6] || keyOf(x)) + "  |  " + (x[7] || "") : "No listed time works (needs a time)") === group).length;
+      const n = rows.filter(x => (keyOf(x) ? dayOf(x) + "  |  " + (x[7] || "") : "No listed time works (needs a time)") === group).length;
       data.push(["", "", "", "", "", "", ""]);
       heads.push(data.length + 1);
       data.push([group + "   (" + n + (n === 1 ? " student)" : " students)"), "", "", "", "", "", ""]);
