@@ -105,7 +105,7 @@ input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 
   <section class="card">
     <h2><span class="num">3</span>Pick a day</h2>
     <div class="legend">
-      <span><i style="background:#fff"></i>Office hours <span id="ohText"></span></span>
+      <span><i style="background:#fff"></i>Office hours: Mon/Wed 2:00–3:50 PM (NS-303), Fri 12–2 PM (NS-127)</span>
       <span><i style="background:var(--amber);border-color:var(--amber-line)"></i>Finals week (tentative)</span>
       <span><i style="background:#f1f2f7;border-color:#eceef5"></i>Not available</span>
     </div>
@@ -148,9 +148,14 @@ input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 
 /* ================= SETTINGS: edit these ================= */
 const CONFIG = {
   // Paste the Google Apps Script web app URL (ends in /exec). Blank = preview mode.
-  scriptUrl: "",
+  scriptUrl: "https://script.google.com/macros/s/AKfycbxWn2CO8sy0_toiivnWhE_V3RcRdRz6d37CM1Yr2gGxv0NoyqwPNlB3voaWCai2UMPP/exec",
   seats: { 1: 8, 3: 8, 5: 30 },         // seats per day: Mon 8, Wed 8, Fri 30 (keep same as the Apps Script)
-  officeHours: { start: "12:00", end: "14:00", text: "12–2 PM"},
+  // Office hours by weekday (1 = Mon, 3 = Wed, 5 = Fri)
+  hours: {
+    1: { start: "14:00", end: "15:50", text: "2:00–3:50 PM", room: "NS-303" },
+    3: { start: "14:00", end: "15:50", text: "2:00–3:50 PM", room: "NS-303" },
+    5: { start: "12:00", end: "14:00", text: "12–2 PM",      room: "NS-127" }
+  },
   firstDay: "2026-11-16",
   lastDay:  "2026-12-04",
   days: [1, 3, 5],                      // Mon, Wed, Fri
@@ -188,7 +193,8 @@ function picks(el, name, list){
 picks($("#sections"), "section", CONFIG.sections);
 picks($("#exams"), "exam", CONFIG.exams);
 picks($("#alts"), "alt", CONFIG.alternatives);
-$("#ohText").textContent = CONFIG.officeHours.text;
+const hrs = s => CONFIG.hours[parse(s).getDay()];
+const whenTxt = s => hrs(s).text + " in " + hrs(s).room;
 
 function isFinals(s){ return s >= CONFIG.finals.start && s <= CONFIG.finals.end; }
 function drawCal(){
@@ -209,7 +215,7 @@ function drawCal(){
       else if (inReg) {
         const left = (CONFIG.seats[dow]||0) - (counts[s]||0);
         if (left <= 0) { label = "Full"; dis = true; cls += " full"; }
-        else label = CONFIG.scriptUrl ? left+" left" : CONFIG.officeHours.text;
+        else label = CONFIG.scriptUrl ? left+" left" : CONFIG.hours[dow].room;
       }
       else if (inFin) { label = "Request"; cls += " fin"; }
       else { label = "—"; dis = true; }
@@ -230,7 +236,7 @@ function showChosen(){
   const fin = isFinals(chosen);
   c.className = "chosen" + (fin ? " fin" : "");
   c.textContent = fin ? `You picked ${nice(chosen)} (finals week). This one is a request; I'll email you to confirm the time.`
-                      : `You picked ${nice(chosen)}, ${CONFIG.officeHours.text} office hours.`;
+                      : `You picked ${nice(chosen)}, ${whenTxt(chosen)} (office hours).`;
 }
 $("#noneWork").addEventListener("change", e => {
   $("#altBox").classList.toggle("hidden", !e.target.checked);
@@ -256,7 +262,7 @@ $("#form").addEventListener("submit", async e => {
     finals: !!(chosen && isFinals(chosen) && !none),
     noneWork: none, alternatives: alts.map(a=>labelOf(CONFIG.alternatives,a)).join("; "),
     availability: $("#avail").value.trim(), notes: $("#notes").value.trim(),
-    window: CONFIG.officeHours.text
+    window: (chosen && !none && !isFinals(chosen)) ? whenTxt(chosen) : ""
   };
   if (!data.name) return fail("Type your full name.", $("#name"));
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(data.email)) return fail("Type a working email so I can confirm your retake.", $("#email"));
@@ -280,7 +286,7 @@ $("#form").addEventListener("submit", async e => {
 
 function showDone(d){
   $("#form").classList.add("hidden"); $("#how").classList.add("hidden");
-  const when = d.noneWork ? "No listed time works (I'll email you)" : d.finals ? d.dateLabel+" (finals week request, time TBA)" : d.dateLabel+", "+CONFIG.officeHours.text;
+  const when = d.noneWork ? "No listed time works (I'll email you)" : d.finals ? d.dateLabel+" (finals week request, time TBA)" : d.dateLabel+", "+d.window;
   const rows = [["Name",d.name],["Email",d.email],["Lab section",d.section],["Exam",d.exam],["When",when]];
   if (d.noneWork && d.alternatives) rows.push(["Options",d.alternatives]);
   if (d.availability) rows.push(["Availability",d.availability]);
@@ -289,8 +295,8 @@ function showDone(d){
   $("#doneMsg").textContent = d.noneWork || d.finals ? "Your request is in. I'll email you to confirm a time." : "See you at office hours. Bring a pencil and your calculator.";
   const g = $("#gcal");
   if (d.date && !d.finals){
-    const ymd = d.date.replace(/-/g,""), st = CONFIG.officeHours.start.replace(":","")+"00", en = CONFIG.officeHours.end.replace(":","")+"00";
-    g.href = "https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent("CHEM 3A "+d.exam+" retake")+"&dates="+ymd+"T"+st+"/"+ymd+"T"+en+"&ctz=America/Los_Angeles&details="+encodeURIComponent("Exam retake during Dr. Dan's office hours. Bring a pencil and calculator.");
+    const ymd = d.date.replace(/-/g,""), h = hrs(d.date), st = h.start.replace(":","")+"00", en = h.end.replace(":","")+"00";
+    g.href = "https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent("CHEM 3A "+d.exam+" retake")+"&dates="+ymd+"T"+st+"/"+ymd+"T"+en+"&ctz=America/Los_Angeles&location="+encodeURIComponent("Fresno City College "+h.room)+"&details="+encodeURIComponent("Exam retake during Dr. Dan's office hours. Bring a pencil and calculator.");
   } else g.classList.add("hidden");
   $("#done").classList.remove("hidden"); window.scrollTo({top:0,behavior:"smooth"});
 }

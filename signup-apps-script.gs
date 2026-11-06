@@ -17,12 +17,13 @@ const SEATS_BY_DAY = { 1: 8, 3: 8, 5: 30 }; // Mon, Wed, Fri seats (keep the sam
 const SEND_STUDENT_EMAIL = true;  // emails each student a confirmation
 const NOTIFY_ME = "";             // your email to get a copy of each sign-up ("" = off)
 const SHEET_NAME = "Sign-Ups";
+const SHEET_ID = "1O7V98-8H3C4siBkKOouEbStVHFy6G4Qt3eKMsQ41EQo"; // the "CHEM 3A Retake Sign-Ups" Google Sheet ("" = the sheet this script is attached to)
 
 const HEADERS = ["Submitted", "Name", "Email", "Lab section", "Exam", "Date", "Day",
   "Window", "Finals week?", "No time works?", "Alternatives", "Availability", "Notes", "Status"];
 
 function sheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = SHEET_ID ? SpreadsheetApp.openById(SHEET_ID) : SpreadsheetApp.getActiveSpreadsheet();
   let sh = ss.getSheetByName(SHEET_NAME);
   if (!sh) {
     sh = ss.insertSheet(SHEET_NAME);
