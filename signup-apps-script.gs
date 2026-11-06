@@ -15,7 +15,7 @@
 
 const SEATS_BY_DAY = null; // null = no limit. To cap: { 1: 8, 3: 8, 5: 30 } (Mon, Wed, Fri; also set CONFIG.seats in signup.html)
 // Spot limits for single time slots (key = date + "T" + start time). Keep the same as the caps in signup.html.
-const SLOT_CAPS = { "2026-12-07T12:00": 5, "2026-12-07T16:00": 5 };
+const SLOT_CAPS = { "2026-12-07T12:00": 5, "2026-12-07T16:00": 5, "2026-12-11T08:00": 10 };
 const SEND_STUDENT_EMAIL = true;  // emails each student a confirmation
 const NOTIFY_ME = "";             // your email to get a copy of each sign-up ("" = off)
 const SHEET_NAME = "Sign-Ups";
