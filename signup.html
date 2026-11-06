@@ -99,6 +99,8 @@ input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 
     <input type="text" id="name" autocomplete="name" required>
     <label class="f" for="email">Student email</label>
     <input type="email" id="email" autocomplete="email" placeholder="you@my.scccd.edu" required>
+    <label class="f" for="sid">Student ID #</label>
+    <input type="text" id="sid" inputmode="numeric" autocomplete="off" placeholder="Example: 1234567" required>
     <label class="f">Your lab section</label>
     <div class="picks" id="sections"></div>
   </section>
@@ -109,7 +111,7 @@ input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 
     <div class="picks" id="exams"></div>
   </section>
 
-  <section class="card">
+  <section class="card" id="step3">
     <h2><span class="num">3</span>Pick a day</h2>
     <div class="legend">
       <span><i style="background:#fff"></i>Office hours: Mon/Wed 2:00–3:50 PM (NS-303), Fri 12–2 PM (NS-127)</span>
@@ -172,12 +174,14 @@ const CONFIG = {
   closed: { "2026-11-26": "Holiday", "2026-11-27": "Holiday" },  // Thanksgiving + in-lieu day
   // Extra times outside office hours. request: true = Dr. Dan confirms by email.
   extra: [
-    // Study Hall Day: open to everyone, can sign up the same day, 32 seats for the whole day
-    { date: "2026-11-17", start: "12:00", end: "13:00", text: "12:00–1:00 PM", room: "NS-339", exam: "Exam 1", walkIn: true, dayCap: 32, label: "Study Hall Day" },
-    { date: "2026-11-17", start: "13:00", end: "14:00", text: "1:00–2:00 PM",  room: "NS-339", exam: "Exam 1", walkIn: true, dayCap: 32, label: "Study Hall Day" },
-    { date: "2026-11-17", start: "12:00", end: "13:30", text: "12:00–1:30 PM", room: "NS-339", exam: "Exam 2", walkIn: true, dayCap: 32, label: "Study Hall Day" },
-    { date: "2026-11-17", start: "13:20", end: "14:50", text: "1:20–2:50 PM",  room: "NS-339", exam: "Exam 2", walkIn: true, dayCap: 32, label: "Study Hall Day" },
+    // Study Hall Day (Tuesday lab time): Tuesday lab students book normally; other sections are requests,
+    // since space depends on how many Tuesday lab students come. Same-day sign-up OK, 32 seats for the day.
+    { date: "2026-11-17", start: "12:00", end: "13:00", text: "12:00–1:00 PM", room: "NS-339", exam: "Exam 1", walkIn: true, dayCap: 32, requestUnless: ["tue"], label: "Study Hall Day" },
+    { date: "2026-11-17", start: "13:00", end: "14:00", text: "1:00–2:00 PM",  room: "NS-339", exam: "Exam 1", walkIn: true, dayCap: 32, requestUnless: ["tue"], label: "Study Hall Day" },
+    { date: "2026-11-17", start: "12:00", end: "13:30", text: "12:00–1:30 PM", room: "NS-339", exam: "Exam 2", walkIn: true, dayCap: 32, requestUnless: ["tue"], label: "Study Hall Day" },
+    { date: "2026-11-17", start: "13:20", end: "14:50", text: "1:20–2:50 PM",  room: "NS-339", exam: "Exam 2", walkIn: true, dayCap: 32, requestUnless: ["tue"], label: "Study Hall Day" },
     { date: "2026-11-19", start: "12:00", end: "14:50", text: "12:00–2:50 PM", room: "NS-339", only: ["sat8","sat11"], request: true },
+    { date: "2026-11-24", start: "15:00", end: "16:00", text: "3:00 PM",       room: "NS-303", request: true },
     { date: "2026-12-01", start: "15:00", end: "16:00", text: "3:00 PM",       room: "NS-303", request: true },
     { date: "2026-12-03", start: "15:00", end: "16:00", text: "3:00 PM",       room: "NS-303", request: true }
   ],
@@ -200,7 +204,8 @@ const CONFIG = {
   ],
   exams: [
     { id: "Exam 1", label: "Exam 1", sub: "Ch 1–4 · 60 minutes", mins: 60 },
-    { id: "Exam 2", label: "Exam 2", sub: "Ch 4–7 and 10 · 90 minutes", mins: 90 }
+    { id: "Exam 2", label: "Exam 2", sub: "Ch 4–7 and 10 · 90 minutes", mins: 90 },
+    { id: "No retake", label: "I don't want a retake", sub: "Keep my scores as they are" }
   ],
   alternatives: [
     { id: "GRASP Fri 8-12", label: "GRASP, Friday 8 AM–12 PM", sub: "If another instructor can give it" },
@@ -234,7 +239,7 @@ function slotsFor(s){
     const h = CONFIG.hours[dow];
     out.push({ ...h, date: s, key: s, cap: CONFIG.seats ? CONFIG.seats[dow] : null, kind: "office hours" });
   }
-  CONFIG.extra.filter(x => x.date === s).forEach(x => out.push({ ...x, key: s + "T" + x.start + (x.exam ? "-E" + x.exam.slice(-1) : ""), kind: x.label || (x.request ? "by request" : "extra time") }));
+  CONFIG.extra.filter(x => x.date === s).forEach(x => out.push({ ...x, key: s + "T" + x.start + (x.exam ? "-E" + x.exam.slice(-1) : ""), kind: x.label || (isReq(x) ? "by request" : "extra time") }));
   CONFIG.finals.slots.filter(x => x.date === s).forEach(x => out.push({ ...x, key: s + "T" + x.start, kind: "finals week" }));
   return out;
 }
@@ -256,6 +261,8 @@ const startOf = sl => { const [y,m,d] = sl.date.split("-").map(Number), [hh,mm] 
 const endOf = sl => { const [y,m,d] = sl.date.split("-").map(Number), [hh,mm] = sl.end.split(":").map(Number); return new Date(y, m-1, d, hh, mm); };
 // walkIn slots (Study Hall Day) can be booked up until they start (same day is fine) and are never "late"
 const tooSoon = sl => sl.walkIn ? startOf(sl) <= Date.now() : (startOf(sl) - Date.now()) / 3600000 < CLOSE_HOURS;
+// requestUnless: those lab sections book normally; everyone else's sign-up is a request
+const isReq = sl => !!sl && (!!sl.request || (!!sl.requestUnless && !sl.requestUnless.includes(val("section"))));
 const lateFor = sl => pastDeadline() && !(sl && sl.walkIn);
 const openSlot = sl => allowed(sl) && examOk(sl) && left(sl) > 0 && !tooSoon(sl);
 const ruleTxt = sl => sl.only ? "Saturday lab students only" : sl.except && sl.except.join() === SAT.join() ? "Not for Saturday labs (your final is then)" : "";
@@ -276,9 +283,9 @@ function drawCal(){
       else if (s < today) { label = "Past"; dis = true; }
       else if (!sl.length) { label = "—"; dis = true; }
       else if (!open.length) { label = sl.every(tooSoon) ? "Closed" : sl.some(x => !allowed(x)) ? "Not your lab" : sl.some(x => !examOk(x)) ? "Other exam" : "Full"; dis = true; cls += " full"; }
-      else label = sl[0].walkIn ? "Study Hall" : sl.length === 1 ? (sl[0].request ? "Request" : sl[0].room) : open.length + (open.length === 1 ? " time" : " times");
+      else label = sl[0].walkIn ? "Study Hall" : sl.length === 1 ? (isReq(sl[0]) ? "Request" : sl[0].room) : open.length + (open.length === 1 ? " time" : " times");
       if (isFinals(s) && sl.length) cls += " fin";
-      else if (sl.length && sl.every(x => x.request)) cls += " req";
+      else if (sl.length && sl.every(x => isReq(x))) cls += " req";
       if (s === chosenDay) cls += " on";
       h += `<button type="button" class="${cls}" data-d="${s}" ${dis?"disabled":""} aria-label="${nice(s)}: ${label}"><span class="m">${MON[d.getMonth()]}</span><b>${d.getDate()}</b><span class="s">${label}</span></button>`;
     }
@@ -287,11 +294,11 @@ function drawCal(){
 }
 function drawSlots(){
   const box = $("#slotBox"), sl = chosenDay ? slotsFor(chosenDay) : [];
-  if (sl.length < 2 && !(sl.length && (isFinals(chosenDay) || sl[0].request))) { box.classList.add("hidden"); return; }
+  if (sl.length < 2 && !(sl.length && (isFinals(chosenDay) || isReq(sl[0])))) { box.classList.add("hidden"); return; }
   $("#slotHead").textContent = "Pick a time on " + nice(chosenDay);
   $("#slotPick").innerHTML = sl.map(x => {
     const ok = allowed(x) && examOk(x), l = left(x), soon = tooSoon(x), dis = !ok || l <= 0 || soon;
-    const sub = [x.room, x.exam ? x.exam + " only" : "", x.request ? "By request" : "", ruleTxt(x), soon ? (x.walkIn ? "Already started" : "Closed (less than 48 hours away)") : x.cap ? (l <= 0 ? "Full" : l + " of " + x.cap + " spots left") : x.dayCap ? (l <= 0 ? "Full" : l + " of " + x.dayCap + " seats left today") : ""].filter(Boolean).join(" · ");
+    const sub = [x.room, x.exam ? x.exam + " only" : "", x.requestUnless && isReq(x) ? "Tuesday lab students come first; space not guaranteed" : "", isReq(x) ? "By request" : "", ruleTxt(x), soon ? (x.walkIn ? "Already started" : "Closed (less than 48 hours away)") : x.cap ? (l <= 0 ? "Full" : l + " of " + x.cap + " spots left") : x.dayCap ? (l <= 0 ? "Full" : l + " of " + x.dayCap + " seats left today") : ""].filter(Boolean).join(" · ");
     return `<label class="pick"><input type="radio" name="slot" value="${x.key}" ${dis?"disabled":""} ${x.key===chosen?"checked":""}><span>${x.text}<small>${sub}</small></span></label>`;
   }).join("");
   box.classList.remove("hidden");
@@ -305,7 +312,12 @@ $("#cal").addEventListener("click", e => {
   if (!chosen) $("#slotBox").scrollIntoView({behavior:"smooth",block:"center"});
 });
 $("#slotPick").addEventListener("change", e => { if (e.target.name === "slot") { chosen = e.target.value; showChosen(); } });
-$("#exams").addEventListener("change", () => $("#sections").dispatchEvent(new Event("change")));
+const noRetake = () => val("exam") === "No retake";
+$("#exams").addEventListener("change", () => {
+  $("#step3").classList.toggle("hidden", noRetake());
+  $("#submit").textContent = noRetake() ? "Submit" : lateFor(findSlot(chosen)) ? "Send Late Request" : "Sign Up";
+  $("#sections").dispatchEvent(new Event("change"));
+});
 $("#sections").addEventListener("change", () => {
   const sl = findSlot(chosen); if (sl && !openSlot(sl)) chosen = null;
   if (chosenDay && !slotsFor(chosenDay).some(openSlot)) chosenDay = null;
@@ -314,8 +326,8 @@ $("#sections").addEventListener("change", () => {
 function showChosen(){
   const c = $("#chosen"), sl = findSlot(chosen);
   if (!sl) return c.classList.add("hidden");
-  c.className = "chosen" + (sl.request ? " req" : isFinals(sl.date) ? " fin" : "");
-  c.textContent = `You picked ${nice(sl.date)}, ${sl.text} in ${sl.room} (${sl.kind}).` + (lateFor(sl) ? " Late request: not guaranteed. I'll email you if I can't fit you in." : sl.request ? " I'll email you to confirm." : "");
+  c.className = "chosen" + (isReq(sl) ? " req" : isFinals(sl.date) ? " fin" : "");
+  c.textContent = `You picked ${nice(sl.date)}, ${sl.text} in ${sl.room} (${sl.kind}).` + (lateFor(sl) ? " Late request: not guaranteed. I'll email you if I can't fit you in." : isReq(sl) ? " I'll email you to confirm." : "");
   $("#submit").textContent = lateFor(sl) ? "Send Late Request" : "Sign Up";
 }
 $("#noneWork").addEventListener("change", e => {
@@ -335,23 +347,25 @@ function fail(msg, el){ const e = $("#err"); e.textContent = msg; e.classList.re
 
 $("#form").addEventListener("submit", async e => {
   e.preventDefault(); $("#err").classList.add("hidden");
-  const none = $("#noneWork").checked, alts = [...document.querySelectorAll('input[name="alt"]:checked')].map(x=>x.value);
-  const sl = none ? null : findSlot(chosen);
+  const none = $("#noneWork").checked && !noRetake(), alts = [...document.querySelectorAll('input[name="alt"]:checked')].map(x=>x.value);
+  const sl = none || noRetake() ? null : findSlot(chosen);
   const data = {
-    name: $("#name").value.trim(), email: $("#email").value.trim().toLowerCase(),
+    name: $("#name").value.trim(), email: $("#email").value.trim().toLowerCase(), studentId: $("#sid").value.replace(/\D/g, ""), noRetake: noRetake(),
     section: labelOf(CONFIG.sections, val("section")), exam: val("exam"),
-    date: sl ? sl.key : "", start: sl ? sl.start : "", dateLabel: sl ? nice(sl.date) : "", finals: false, request: !!(sl && sl.request) || lateFor(sl), late: lateFor(sl), walkIn: !!(sl && sl.walkIn),
+    date: sl ? sl.key : "", start: sl ? sl.start : "", dateLabel: sl ? nice(sl.date) : "", finals: false, request: !noRetake() && (!!(sl && isReq(sl)) || lateFor(sl)), late: !noRetake() && lateFor(sl), walkIn: !!(sl && sl.walkIn),
     window: sl ? sl.text + " in " + sl.room : "",
-    when: sl ? nice(sl.date) + ", " + sl.text + " in " + sl.room + (lateFor(sl) ? " (late request, not guaranteed). Dr. Dan will email you if he can't fit you in." : sl.request ? " (by request). Dr. Dan will email you to confirm." : " (" + sl.kind + ")")
+    when: sl ? nice(sl.date) + ", " + sl.text + " in " + sl.room + (lateFor(sl) ? " (late request, not guaranteed). Dr. Dan will email you if he can't fit you in." : isReq(sl) ? " (by request). Dr. Dan will email you to confirm." : " (" + sl.kind + ")")
       + "\n\nPlease arrive at the START of this time so you get the full " + examMins(val("exam")) + " minutes for " + val("exam") + ". If you come late, you get less time." : "",
     noneWork: none, alternatives: alts.map(a=>labelOf(CONFIG.alternatives,a)).join("; "),
     availability: $("#avail").value.trim(), notes: $("#notes").value.trim()
   };
   if (!data.name) return fail("Type your full name.", $("#name"));
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(data.email)) return fail("Type a working email so I can confirm your retake.", $("#email"));
+  if (data.studentId.length < 5) return fail("Type your Student ID number.", $("#sid"));
   if (!val("section")) return fail("Tap your lab section.", $("#sections"));
   if (!data.exam) return fail("Tap which exam you're retaking.", $("#exams"));
-  if (!none && !sl) return chosenDay ? fail("Pick a time for " + nice(chosenDay) + ".", $("#slotBox")) : fail("Tap a day on the calendar, or check \"None of these times work for me.\"", $("#cal"));
+  if (data.noRetake) { data.alternatives = ""; data.availability = ""; }
+  if (!data.noRetake && !none && !sl) return chosenDay ? fail("Pick a time for " + nice(chosenDay) + ".", $("#slotBox")) : fail("Tap a day on the calendar, or check \"None of these times work for me.\"", $("#cal"));
   if (sl && tooSoon(sl)) return fail(sl.walkIn ? "That time has already started. Pick a later time." : "Sign-ups close 48 hours before each time. Pick a later day.", $("#cal"));
   if (sl && !examOk(sl)) return fail("That time is for " + sl.exam + ". Pick a time for " + data.exam + ".", $("#slotBox"));
   if (sl && !allowed(sl)) return fail("That time isn't open to your lab section. Pick another time.", $("#slotBox"));
@@ -372,17 +386,22 @@ $("#form").addEventListener("submit", async e => {
 
 function showDone(d, sl){
   $("#form").classList.add("hidden"); $("#how").classList.add("hidden");
-  const when = d.noneWork ? "No listed time works (I'll email you)" : nice(sl.date) + ", " + sl.text + " in " + sl.room + (sl.request ? " (request)" : "");
-  const rows = [["Name",d.name],["Email",d.email],["Lab section",d.section],["Exam",d.exam],["When",when]];
+  if (d.noRetake) {
+    $("#doneHead").textContent = "Got it!";
+    $("#doneMsg").textContent = "You told Dr. Dan you don't want a retake. Changed your mind? Fill out this form again with the same email.";
+    $("#sum").innerHTML = ""; $("#gcal").classList.add("hidden"); $("#done").classList.remove("hidden"); window.scrollTo({top:0,behavior:"smooth"}); return;
+  }
+  const when = d.noneWork ? "No listed time works (I'll email you)" : nice(sl.date) + ", " + sl.text + " in " + sl.room + (isReq(sl) ? " (request)" : "");
+  const rows = [["Name",d.name],["Email",d.email],["Student ID",d.studentId],["Lab section",d.section],["Exam",d.exam],["When",when]];
   if (d.noneWork && d.alternatives) rows.push(["Options",d.alternatives]);
   if (d.availability) rows.push(["Availability",d.availability]);
   $("#sum").innerHTML = rows.map(([k,v])=>`<div><dt>${k}</dt><dd></dd></div>`).join("");
   [...$("#sum").querySelectorAll("dd")].forEach((dd,i)=>dd.textContent = rows[i][1]);
-  if (d.late) $("#doneHead").textContent = "Request sent";
+  if (d.request) $("#doneHead").textContent = "Request sent";
   const arrive = " Please arrive at the start of your time so you get the full " + examMins(d.exam) + " minutes for " + d.exam + ".";
-  $("#doneMsg").textContent = d.late ? "Your late request is in. It is not guaranteed; I'll email you if I can't fit you in." + arrive : d.noneWork ? "Your request is in. I'll email you to set a time." + arrive : sl.request ? "Your request is in. I'll email you to confirm before you come in." + arrive : "See you then. Bring a pencil and your calculator." + arrive;
+  $("#doneMsg").textContent = d.late ? "Your late request is in. It is not guaranteed; I'll email you if I can't fit you in." + arrive : d.noneWork ? "Your request is in. I'll email you to set a time." + arrive : isReq(sl) ? "Your request is in. I'll email you to confirm before you come in." + arrive : "See you then. Bring a pencil and your calculator." + arrive;
   const g = $("#gcal");
-  if (sl && !sl.request && !d.late){
+  if (sl && !isReq(sl) && !d.late){
     const [hh, mm] = sl.start.split(":").map(Number), endMin = hh*60 + mm + examMins(d.exam);
     const ymd = sl.date.replace(/-/g,""), st = sl.start.replace(":","")+"00", en = String(Math.floor(endMin/60)).padStart(2,"0") + String(endMin%60).padStart(2,"0") + "00";
     g.href = "https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent("CHEM 3A "+d.exam+" retake")+"&dates="+ymd+"T"+st+"/"+ymd+"T"+en+"&ctz=America/Los_Angeles&location="+encodeURIComponent("Fresno City College "+sl.room)+"&details="+encodeURIComponent("CHEM 3A " + d.exam + " retake with Dr. Dan (" + examMins(d.exam) + " minutes). Arrive at the start of the time. Bring a pencil and calculator.");
