@@ -3,7 +3,7 @@
 <meta name="robots" content="noindex,nofollow">
 <title>Exam Retake Prep • CHEM 3A • ItsDrDan</title>
 <style>
-:root{--bg:#f5f6fb;--surface:#fff;--paper:#fffdf9;--ink:#1f2a44;--muted:#4f5a74;--faint:#6f7890;--line:#e3e6f0;--line2:#d5d9e8;--accent:#4b57d1;--accent-d:#3c47b8;--accent-soft:#eef0fe;--mint:#e8f6ef;--mint-ink:#23704f;--mint-line:#a9d9c2;--amber:#fff6e2;--amber-ink:#80601a;--amber-line:#f0dca6;--rose:#fdedf0;--rose-ink:#9c3346;--rose-line:#eab3bd;--lav:#f3effd;--sky:#eaf4fb;--c3A:#23776c;--c3A-bg:#e4f3ec;--r-lg:20px;--r-md:14px;--r-sm:10px;--shadow:0 1px 2px #1f2a440d,0 6px 20px #1f2a440a;--font:Nunito,ui-sans-serif,system-ui,sans-serif;--font-display:Fredoka,Nunito,system-ui,sans-serif;--serif:Cambria,"Times New Roman",serif}
+:root{--bg:#f5f6fb;--surface:#fff;--paper:#fffdf9;--ink:#1f2a44;--muted:#4f5a74;--faint:#646c82;--line:#e3e6f0;--line2:#d5d9e8;--accent:#4b57d1;--accent-d:#3c47b8;--accent-soft:#eef0fe;--mint:#e8f6ef;--mint-ink:#23704f;--mint-line:#a9d9c2;--amber:#fff6e2;--amber-ink:#80601a;--amber-line:#f0dca6;--rose:#fdedf0;--rose-ink:#9c3346;--rose-line:#eab3bd;--lav:#f3effd;--sky:#eaf4fb;--c3A:#23776c;--c3A-bg:#e4f3ec;--r-lg:20px;--r-md:14px;--r-sm:10px;--shadow:0 1px 2px #1f2a440d,0 6px 20px #1f2a440a;--font:Nunito,ui-sans-serif,system-ui,sans-serif;--font-display:Fredoka,Nunito,system-ui,sans-serif;--serif:Cambria,"Times New Roman",serif}
 *{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);line-height:1.45;font-size:16px}
 button,input,select{font:inherit;color:inherit}
@@ -382,7 +382,7 @@ function zoomScale(o) {
     }
   }
   t += `</g><circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="#7884ea" stroke-width="4"/>`;
-  t += `<text x="${cx + R - 10}" y="${cy - R + 34}" text-anchor="end" font-size="20" font-weight="800" fill="#7a8299">${unit}</text>`;
+  t += `<text x="${cx + R - 10}" y="${cy - R + 34}" text-anchor="end" font-size="20" font-weight="800" fill="#656c83">${unit}</text>`;
   return t;
 }
 
@@ -412,7 +412,7 @@ function instrumentSVG(full, zoomOpts, label) {
   t += `<rect x="${full.x - 40}" y="${full.y - 14}" width="50" height="28" rx="6" fill="none" stroke="#7884ea" stroke-width="2.5"/>`;
   t += `<line x1="${full.x + 10}" y1="${full.y - 14}" x2="${cx - R * 0.72}" y2="${cy - R * 0.7}" stroke="#7884ea" stroke-width="2" stroke-dasharray="5 4"/><line x1="${full.x + 10}" y1="${full.y + 14}" x2="${cx - R * 0.72}" y2="${cy + R * 0.7}" stroke="#7884ea" stroke-width="2" stroke-dasharray="5 4"/>`;
   t += zoomScale({ cx, cy, R, ...zoomOpts });
-  t += `<text x="${cx}" y="${cy + R + 34}" text-anchor="middle" font-size="16" font-weight="700" fill="#7a8299">zoomed in</text>`;
+  t += `<text x="${cx}" y="${cy + R + 34}" text-anchor="middle" font-size="16" font-weight="700" fill="#656c83">zoomed in</text>`;
   return t + '</svg>';
 }
 function lcd(text, unit, kind, caption) {
