@@ -694,7 +694,7 @@ window._partById={};
 /* ======================= rendering ======================= */
 let uid=0;
 function renderPart(p,qid,idx){const id=`${qid}-${idx}`;p.id=id;_partById[id]=p;const lab=p.label?`<label for="${id}">${p.label}</label>`:'';
- if(p.kind==='num'||p.kind==='meas')return `<div class="part">${lab}<input class="ans${p.short?'':' '}${p.wide?' wide':''}" id="${id}" inputmode="decimal" autocomplete="off" placeholder="${p.kind==='meas'?'value + unit':'answer'}" ${p.short?'style="min-width:90px;max-width:120px"':''}></div>`;
+ if(p.kind==='num'||p.kind==='meas')return `<div class="part">${lab}<input class="ans${p.short?'':' '}${p.wide?' wide':''}" id="${id}" inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="${p.kind==='meas'?'value + unit':'answer'}" ${p.short?'style="min-width:90px;max-width:120px"':''}></div>`;
  if(p.kind==='text')return `<div class="part">${lab}<input class="ans wide" id="${id}" autocomplete="off" autocapitalize="off" placeholder="${p.ph||''}"></div>`;
  if(p.kind==='formula')return `<div class="part">${lab}<input class="ans" id="${id}" autocomplete="off" autocapitalize="off" placeholder="e.g. Al₂(SO₄)₃"></div>`;
  if(p.kind==='cfg')return `<div class="part">${lab}<input class="ans wide" id="${id}" autocomplete="off" autocapitalize="off" placeholder="${p.ion?'e.g. [Ne] 3s² 3p⁶':'e.g. 1s² 2s² 2p⁶'}"></div>`;
