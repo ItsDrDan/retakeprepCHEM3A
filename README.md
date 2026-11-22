@@ -15,3 +15,7 @@ Game design and chemistry by ItsDrDan. AI (Claude by Anthropic) helped write the
 ## Retake sign-up
 
 `signup.html` is the retake sign-up form (name, email, lab section, Exam 1 or 2, a day from Mon/Wed/Fri office hours Nov 16 – Dec 4, or a finals-week request). Sign-ups save to a Google Sheet through the Apps Script in `signup-apps-script.gs`; paste its web app URL into `CONFIG.scriptUrl` at the top of `signup.html`.
+
+## CHEM 1A retake sign-up
+
+`signup-1a.html` is the CHEM 1A version (Exam 1, 2 or 3; office hours Nov 23 – Dec 4 plus finals-week times that avoid the CHEM 1A final on Mon Dec 7 at 4 PM; sign-ups close Tue Dec 1). It saves to its own "CHEM 1A Retake Sign-Ups" Google Sheet through `signup-1a-apps-script.gs`; paste that web app URL into `CONFIG.scriptUrl` at the top of `signup-1a.html`.
