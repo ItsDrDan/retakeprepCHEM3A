@@ -370,5 +370,24 @@ new MutationObserver(addExamples).observe(el('train').parentNode,{childList:true
 /* a returning student's mock can be built before this file loads: rebuild it if untouched */
 if(state.mock&&!state.mock.graded&&!state.mock.qs.some(q=>q.allParts&&q.allParts.some(answered))&&state.mock.qs.some(q=>q.type===resSlot&&!(q.allParts||q.parts).some(p=>p.kind==='lewis'))){const x=state.mock.exam;buildMock();state.mock.exam=x==null?state.exam:x}
 
-window.RetakePlus={minsOf,lewisData,LWPOOL,RDRAW,WX,get examDay(){return day},end};
+/* ---------- mock exam answers survive reloads and app switches (saved on this device only) ---------- */
+const mkK=x=>'-mock'+x;const mkClear=x=>{try{localStorage.removeItem(KEY+mkK(x))}catch(e){}};
+const mkRng=s=>()=>{s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
+const mkFp=qs=>{let h=0;const s=qs.map(q=>q.type+'|'+q.prompt+'|'+q.allParts.length).join('~');for(let i=0;i<s.length;i++)h=Math.imul(h,31)+s.charCodeAt(i)|0;return h};
+let mkRestore=null,mkTimer=0;
+const bmSeed=buildMock;buildMock=function(){const seed=mkRestore?mkRestore.seed:Math.floor(Math.random()*4294967296),R=Math.random;Math.random=mkRng(seed);try{bmSeed.apply(this,arguments)}finally{Math.random=R}state.mock.seed=seed};
+const mkFields=n=>n.matches('input,select')?[n]:[...n.querySelectorAll('input,select')];
+const mkRead=p=>{const n=el(p.id);if(!n)return null;if(p.kind==='lewis')return p.st;if(p.kind==='chk')return [...n.querySelectorAll('input:checked')].map(i=>+i.value);if(p.kind==='orbital'||p.kind==='obx')return [...n.querySelectorAll('.obox')].map(b=>b.textContent);if(p.kind==='dots')return [...n.querySelectorAll('.d')].map(d=>d.classList.contains('on')?1:0);if(p.kind==='mc'){const r=n.querySelector('input:checked');return r?+r.value:null}return mkFields(n).map(f=>f.value)};
+const mkWrite=(p,v)=>{const n=el(p.id);if(!n||v==null)return;if(p.kind==='lewis'){p.st=v;drawLw(p)}else if(p.kind==='chk')n.querySelectorAll('input').forEach(i=>{i.checked=v.includes(+i.value)});else if(p.kind==='orbital'||p.kind==='obx')n.querySelectorAll('.obox').forEach((b,i)=>{const x=v[i]||'';b.textContent=x;if(p.kind==='obx')b.setAttribute('aria-label',`${b.dataset.sub} orbital box: ${x==='↑↓'?'two electrons, paired':x==='↑'?'one electron, spin up':'empty'}`)});else if(p.kind==='dots')n.querySelectorAll('.d').forEach((d,i)=>d.classList.toggle('on',!!v[i]));else if(p.kind==='mc'){const r=n.querySelector(`input[value="${v}"]`);if(r){r.checked=true;r.closest('label').classList.add('pick')}}else{mkFields(n).forEach((f,i)=>{f.value=v[i]==null?'':v[i]});if(p.kind==='nuc'){const f=n.querySelector('input');if(f)f.dispatchEvent(new Event('input',{bubbles:true}))}}};
+function mkSave(){clearTimeout(mkTimer);const M=state.mock;if(!M||M.graded||M.seed==null||M.exam==null)return;if(!day&&!M.qs.some(q=>q.allParts.some(answered))){mkClear(M.exam);return}LS.set(mkK(M.exam),{v:1,seed:M.seed,fp:mkFp(M.qs),el:Date.now()-state.t0,dayEnd:day?day.end:0,a:M.qs.map(q=>q.allParts.map(mkRead))})}
+const mkSoon=e=>{if(e.target.closest&&e.target.closest('#mockBody')){clearTimeout(mkTimer);mkTimer=setTimeout(mkSave,120)}};['input','change','click','pointerup'].forEach(t=>document.addEventListener(t,mkSoon,true));
+window.addEventListener('pagehide',mkSave);document.addEventListener('visibilitychange',()=>{if(document.hidden)mkSave()});
+function mkLoad(x){const s=LS.get(mkK(x),null);if(!s||s.v!==1)return false;mkRestore=s;try{buildMock()}finally{mkRestore=null}state.mock.exam=x;const qs=state.mock.qs;if(mkFp(qs)!==s.fp||s.a.length!==qs.length){mkClear(x);buildMock();state.mock.exam=x;return true}qs.forEach((q,i)=>q.allParts.forEach((p,j)=>mkWrite(p,(s.a[i]||[])[j])));state.t0=Date.now()-(s.el||0);updateStatus();if(s.dayEnd){day={end:s.dayEnd,t:setInterval(tick,1000)};document.body.classList.add('exam-day');bar.querySelector('.ed-idle').hidden=true;bar.querySelector('.ed-live').hidden=false;tick()}if(state.mock&&!state.mock.graded)toast('Your exam is back where you left it');return true}
+const smOrig=showMock;showMock=function(){if((!state.mock||state.mock.exam!==state.exam)&&mkLoad(state.exam))return;smOrig()};
+const mkWrap=(id,done)=>{const b=el(id),o=b.onclick;b.onclick=function(){const m=state.mock;o.call(this);done(m)}};
+mkWrap('bNewMock',m=>{if(state.mock!==m)mkClear(state.exam)});mkWrap('edStart',m=>{if(state.mock!==m){mkClear(state.exam);mkSave()}});mkWrap('bGrade',()=>{if(state.mock&&state.mock.graded)mkClear(state.mock.exam)});
+const mkStart=()=>{if(state.mode!=='mock')return;const M=state.mock,used=M&&M.qs.some(q=>q.allParts.some(answered));if(LS.get(mkK(state.exam),null)&&!used)mkLoad(state.exam);else if(M&&M.seed==null&&!M.graded&&!used){const x=M.exam;buildMock();state.mock.exam=x==null?state.exam:x}};
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mkStart);else mkStart();
+
+window.RetakePlus={mkSave,mkLoad,minsOf,lewisData,LWPOOL,RDRAW,WX,get examDay(){return day},end};
 })();

@@ -93,3 +93,7 @@
 body.exam-day .stat:has(#clock){display:none}
 /* worked examples */
 .wx{margin-top:8px;border:1.5px solid #cfd8f3;border-radius:10px;background:#f6f8ff;padding:0 12px}.wx summary{min-height:44px;display:flex;align-items:center;font-weight:800;color:#33408f;cursor:pointer}.wx ol{padding-left:22px;margin:6px 0}.wx li{margin:4px 0}.wx p{margin:6px 0}.wx-tip{font-weight:700;padding-bottom:6px}
+
+/* leave room beside the mock exam Grade bar for the feedback button */
+@media(max-width:900px){#mock .sticky{margin-right:48px}}
+@media(max-width:700px){#bGrade i{display:none}#bGrade{white-space:nowrap}}
