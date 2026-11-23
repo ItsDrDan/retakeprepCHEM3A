@@ -291,7 +291,7 @@ if(ui.mode==='plan')state.mode='plan';buildModes();show();
 window.RetakePlan={render,dueFixes,fixes,planOf,cleanFix,get session(){return sess}};
 })();
 
-/* ======================= Exam Day, printable mocks, video help, Lewis drawing ======================= */
+/* ======================= Exam Day, video help, Lewis drawing ======================= */
 (function(){
 if(typeof G==='undefined'||typeof EXAMS==='undefined'||!window.EXAM_BOOK)return;
 const el=id=>document.getElementById(id),course=EXAM_BOOK.course,is1A=course==='CHEM 1A',lewisExam=is1A?3:2;
@@ -334,7 +334,7 @@ new MutationObserver(addVideos).observe(el('train').parentNode,{childList:true,s
 /* ---------- Exam Day ---------- */
 const minsOf=e=>EXAMS[e].mins||(is1A?90:{1:60,2:90}[e]);
 let day=null;const fmtT=s=>Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
-const bar=document.createElement('div');bar.id='edBar';bar.innerHTML='<div class="ed-idle"><button class="btn primary" id="edStart">Start Exam Day</button><button class="btn" id="edPrint">Print exam + key</button><small>Exam Day is timed, with no hints. You get only the Book and Calc.</small></div><div class="ed-live" hidden role="timer" aria-live="off"><b id="edClock"></b><span>Exam Day. Grade when you finish.</span></div>';
+const bar=document.createElement('div');bar.id='edBar';bar.innerHTML='<div class="ed-idle"><button class="btn primary" id="edStart">Start Exam Day</button><small>Exam Day is timed, with no hints. You get only the Book and Calc.</small></div><div class="ed-live" hidden role="timer" aria-live="off"><b id="edClock"></b><span>Exam Day. Grade when you finish.</span></div>';
 const jump=el('jump');jump.parentNode.insertBefore(bar,jump);
 const end=()=>{if(day){clearInterval(day.t);day=null}document.body.classList.remove('exam-day');bar.querySelector('.ed-idle').hidden=false;bar.querySelector('.ed-live').hidden=true};
 function tick(){if(!day)return;const left=Math.max(0,Math.ceil((day.end-Date.now())/1000));el('edClock').textContent=fmtT(left);el('edClock').classList.toggle('low',left<=300);if(left===300)toast('5 minutes left');if(left<=0){const c=window.confirm;window.confirm=()=>true;try{toast("Time's up. Grading your exam.");el('bGrade').click()}finally{window.confirm=c}}}
@@ -343,11 +343,5 @@ document.addEventListener('visibilitychange',tick);
 document.addEventListener('click',e=>{if(!day)return;const t=e.target.closest&&e.target.closest('.mode,.exam-card,#bNewMock');if(t){e.preventDefault();e.stopPropagation();toast('Finish and grade your exam first')}},true);
 const gr=el('bGrade').onclick;el('bGrade').onclick=function(){gr.call(this);if(state.mock&&state.mock.graded)end()};
 
-/* ---------- printable exam + key ---------- */
-const clean=s=>String(s||'').replace(/<input[^>]*>/g,'');const line='<span class="pr-line"></span>';
-function prPart(p){const lab=clean(p.label);if(p.kind==='sel')return `<div class="pr-p">${lab} ${line}<small>${p.opts.join('  •  ')}</small></div>`;if(p.kind==='mc')return `<ol class="pr-mc" type="a">${p.opts.map(o=>`<li>${o}</li>`).join('')}</ol>`;if(p.kind==='chk')return `<div class="pr-p">${lab}<small>Circle all that apply: ${p.opts.join('  •  ')}</small></div>`;if(p.kind==='obx')return `<div class="pr-p">${lab}${p.levels.map(l=>`<div class="pr-box"><b>${l.name}</b>${'<span></span>'.repeat(l.n)}</div>`).join('')}</div>`;if(p.kind==='lewis')return '<div class="pr-draw">Draw here</div>';if(p.kind==='wordeq')return `<div class="pr-p">Balanced equation: <span class="pr-line wide"></span></div>`;if(p.kind==='coef')return `<div class="pr-p">${p.r[0].map(f=>'___ '+fml(f)).join(' + ')} → ${p.r[1].map(f=>'___ '+fml(f)).join(' + ')}</div>`;return `<div class="pr-p">${lab} ${line}</div>`}
-function prQ(q,n){let body;if(q.table)body=`<table class="pr-t"><tr>${q.table.head.map(h=>`<th>${h}</th>`).join('')}</tr>${q.table.rows.map(r=>`<tr>${r.map(c=>`<td>${c.kind==='given'?(c.html||c.text||''):''}</td>`).join('')}</tr>`).join('')}</table>`;else body=(q.pd?`<div class="pr-pd">${q.pd.map((x,i)=>`<span>${x}<b>${String.fromCharCode(65+i)}</b></span>`).join('')}</div>`:'')+q.parts.map(prPart).join('');return `<section class="pr-q"><h3>${n}. <small>(${q.pts} points)</small></h3><div>${q.prompt}</div>${body}<div class="pr-work"></div></section>`}
-function printExam(){if(!state.mock)buildMock();const ex=EXAMS[state.exam],qs=state.mock.qs;let box=el('xPrint');if(!box){box=document.createElement('div');box.id='xPrint';document.body.appendChild(box)}const secs=ex.sections;let html=`<header><h1>${course} ${ex.name}: Practice Exam</h1><p>Name: <span class="pr-line wide"></span></p><p>Show your work. Use a calculator and your exam reference sheet. Time: ${minsOf(state.exam)} minutes. This practice exam is not graded.</p></header>`,sec='';qs.forEach((q,i)=>{if(q.sec!==sec){sec=q.sec;html+=`<h2>${(secs.find(s=>s[0]===sec)||[])[1]||''}</h2>`}html+=prQ(q,i+1)});html+=`<div class="pr-key"><h1>Answer Key: ${ex.name}</h1>${qs.map((q,i)=>`<section class="pr-k"><b>${i+1}.</b> ${q.sol}</section>`).join('')}</div>`;box.innerHTML=html;document.body.classList.add('printing');const off=()=>{document.body.classList.remove('printing');removeEventListener('afterprint',off)};addEventListener('afterprint',off);setTimeout(()=>window.print(),80)}
-el('edPrint').onclick=printExam;
-window.RetakePlus={minsOf,printExam,lewisData,LWPOOL,get examDay(){return day},end};
+window.RetakePlus={minsOf,lewisData,LWPOOL,get examDay(){return day},end};
 })();
