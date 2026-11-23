@@ -205,7 +205,7 @@ function make(t){const ex=state.exam;let q;if(t.startsWith('bank:')){q=bankToQ(p
 const hintsOf=q=>typeof hintSteps==='function'?hintSteps(q):[q.hint].filter(Boolean);
 const preOf=(ex,t)=>typeof prereqFor==='function'?prereqFor(ex,t):null;
 const fixRec=t=>{if(typeof recordFix==='function')recordFix(t)};
-const track=(q,res)=>{if(typeof trackQ==='function')return trackQ(q,res);try{window.ddTrack&&ddTrack({game:'retakeprep',course:'CHEM 3A',mode:'Plan',topic:EXAMS[state.exam].name+': '+((EXAMS[state.exam].sections.find(x=>x[0]===q.sec)||[])[1]||''),correct:res.earned>=q.pts})}catch(e){}};
+const track=(q,res)=>{if(typeof trackQ==='function')return trackQ(q,res);try{window.ddTrack&&ddTrack({game:'retakeprep',course:'CHEM 3A',mode:'Plan',topic:EXAMS[state.exam].name+': '+((typeof TYPE_NAMES!=='undefined'&&TYPE_NAMES[q.type])||(EXAMS[state.exam].sections.find(x=>x[0]===q.sec)||[])[1]||''),correct:res.earned>=q.pts})}catch(e){}};
 function reveal(q){if(typeof revealMC==='function')return revealMC(q);q.allParts.forEach(p=>{if(p.kind!=='mc')return;const e=el(p.id);if(e)e.querySelectorAll('label').forEach((l,i)=>{if(i===p.ans)l.classList.add('good')})})}
 function unlock(q){if(typeof unlockQ==='function')return unlockQ(q);const box=el(q.qid);box.classList.remove('ok','part','bad');q.allParts.forEach(p=>{const e=el(p.id);if(!e)return;(e.matches('input,select')?[e]:[...e.querySelectorAll('input,select')]).forEach(i=>{i.disabled=false;i.classList.remove('good','wrong')});if(p.kind==='mc')e.querySelectorAll('label').forEach(l=>{l.classList.remove('good','wrong');if(l.querySelector('input:checked'))l.classList.add('pick')});e.style.outline='';e.querySelectorAll('.obox,.d,.chk-opt').forEach(x=>x.style.pointerEvents='')})}
 
@@ -343,5 +343,32 @@ document.addEventListener('visibilitychange',tick);
 document.addEventListener('click',e=>{if(!day)return;const t=e.target.closest&&e.target.closest('.mode,.exam-card,#bNewMock');if(t){e.preventDefault();e.stopPropagation();toast('Finish and grade your exam first')}},true);
 const gr=el('bGrade').onclick;el('bGrade').onclick=function(){gr.call(this);if(state.mock&&state.mock.graded)end()};
 
-window.RetakePlus={minsOf,lewisData,LWPOOL,get examDay(){return day},end};
+/* ---------- Lewis drawing inside mock exams (same question slot, same points) ---------- */
+const RDRAW=[['NO₃⁻','N','O O O',-1,[[2,1,1]],3],['CO₃²⁻','C','O O O',-2,[[2,1,1]],3],['NO₂⁻','N','O O',-1,[[2,1]],2],['O₃','O','O O',0,[[2,1]],2]];
+const resSlot=is1A?'x3resonance':'resonance',resOrig=G[resSlot];let inMock=false;
+const lwPart=d=>({kind:'lewis',label:'',d,st:{b:d.O.map(()=>1),l:d.O.map(()=>0),c:0}});
+const lwTap='Tap a <b>bond</b> to switch single, double, or triple. Tap an <b>atom</b> to add a lone pair.';
+G[resSlot]=function(){if(!inMock)return resOrig();let q=resOrig(),r=null;
+ if(is1A){for(let i=0;i<120;i++){r=RDRAW.find(x=>q.prompt.includes('<b>'+x[0]+'</b>'));if(r)break;q=resOrig()}}else r=pick(RDRAW);
+ const d=lewisData(r.slice(0,5)),a=d.acc[0],pic=lewisSVG(d,a.b,a.l,a.c,false);
+ if(is1A){q.prompt=`Draw one valid Lewis structure of <b>${d.f}</b>. ${lwTap} Then answer:`;q.parts[0]=lwPart(d);q.sol=q.sol.replace('</ol>',`<li>One valid structure:${pic}</li></ol>`);return q}
+ q.prompt=`Draw one valid Lewis structure of <b>${d.f}</b>. ${lwTap} Then answer:`;q.work=false;q.parts=[lwPart(d),{kind:'num',label:'Number of resonance structures',ans:r[5],tol:0}];q.hint='Count total valence electrons first. Resonance appears when a double bond could sit in more than one equivalent place.';q.sol=`<ol><li>Total valence electrons = <span class="ans">${d.T}</span></li><li>The double bond can sit in any of <span class="ans">${r[5]}</span> equivalent positions.</li><li>One valid structure:${pic}</li></ol>`;return q};
+const lwStatus=e=>{if(e.target.closest&&e.target.closest('.lw')&&state.mode==='mock')setTimeout(()=>{try{updateStatus()}catch(_){}},0)};document.addEventListener('pointerup',lwStatus);document.addEventListener('keyup',lwStatus);
+const bmOrig=buildMock;buildMock=function(){inMock=true;try{return bmOrig.apply(this,arguments)}finally{inMock=false}};
+
+/* ---------- worked examples for skills without a video ---------- */
+const WX={
+x1stats:['Mean and standard deviation','Four masses are measured: 2.14, 2.18, 2.16, and 2.12 g.',['Mean = (2.14 + 2.18 + 2.16 + 2.12) ÷ 4 = 8.60 ÷ 4 = <b>2.15 g</b>','Subtract the mean from each value: −0.01, +0.03, +0.01, −0.03','Square and add: 0.0001 + 0.0009 + 0.0001 + 0.0009 = 0.0020','Divide by n − 1, which is 3: 0.0020 ÷ 3 = 0.00067','Take the square root: s = <b>0.026 g</b>'],'On the calculator, use 1-Var Stats and read Sx, the sample standard deviation.'],
+x1precision:['Precision vs. accuracy','A flask holds exactly 10.00 mL. Two students measure it three times.',['Student A: 9.62, 9.60, 9.61 mL. The values agree closely, so they are precise. The average, 9.61 mL, is far from 10.00 mL, so they are <b>precise, not accurate</b>.','Student B: 9.50, 10.60, 9.90 mL. The values are spread out, so they are not precise. The average, 10.00 mL, matches the true value, so they are <b>accurate on average, not precise</b>.'],'Check the spread for precision. Check the average against the true value for accuracy.'],
+x2hf:['Enthalpy of formation','Find ΔH° for 2 CO(g) + O₂(g) → 2 CO₂(g). ΔH°f: CO = −110.5 kJ/mol, CO₂ = −393.5 kJ/mol.',['O₂ is an element in its standard state, so its ΔH°f is 0.','Products: 2(−393.5) = −787.0 kJ','Reactants: 2(−110.5) + 1(0) = −221.0 kJ','ΔH° = products − reactants = −787.0 − (−221.0) = <b>−566.0 kJ</b>'],'Multiply each ΔH°f by its coefficient, then do products minus reactants.'],
+x2hess:["Hess's law",'Find ΔH for SO₂ + ½ O₂ → SO₃ using (1) S + O₂ → SO₂, ΔH = −297 kJ and (2) 2 S + 3 O₂ → 2 SO₃, ΔH = −792 kJ.',['SO₂ must be a reactant, so flip reaction 1: SO₂ → S + O₂, ΔH = +297 kJ','Only 1 SO₃ is needed, so multiply reaction 2 by ½: S + 3/2 O₂ → SO₃, ΔH = −396 kJ','Add them. S cancels, and 3/2 O₂ − 1 O₂ leaves ½ O₂ on the left.','ΔH = +297 + (−396) = <b>−99 kJ</b>'],'Flipping changes the sign. Scaling a reaction scales its ΔH by the same number.'],
+x3bonde:['Bond energies','For H₂ + Cl₂ → 2 HCl, ΔH = −185 kJ. H–H = 436 and Cl–Cl = 243 kJ/mol. Estimate the H–Cl bond energy.',['Bonds broken: 436 + 243 = 679 kJ','ΔH = broken − made, so made = broken − ΔH = 679 − (−185) = 864 kJ','Two H–Cl bonds form: 2(H–Cl) = 864 kJ','H–Cl = 864 ÷ 2 = <b>432 kJ/mol</b>'],'Breaking bonds takes energy. Making bonds releases it.']
+};
+const wxHTML=w=>`<details class="wx"><summary>See a worked example: ${w[0]}</summary><p><b>Example.</b> ${w[1]}</p><ol>${w[2].map(s=>`<li>${s}</li>`).join('')}</ol><p class="wx-tip">${w[3]}</p></details>`;
+function addExamples(){document.querySelectorAll('.q').forEach(b=>{const w=b.querySelector('.fbwrap');if(!w||w.querySelector('.wx'))return;if(!w.querySelector('.fb.bad,.fb.part'))return;const x=WX[QT[b.id]];if(x)w.insertAdjacentHTML('beforeend',wxHTML(x))})}
+new MutationObserver(addExamples).observe(el('train').parentNode,{childList:true,subtree:true});
+/* a returning student's mock can be built before this file loads: rebuild it if untouched */
+if(state.mock&&!state.mock.graded&&!state.mock.qs.some(q=>q.allParts&&q.allParts.some(answered))&&state.mock.qs.some(q=>q.type===resSlot&&!(q.allParts||q.parts).some(p=>p.kind==='lewis'))){const x=state.mock.exam;buildMock();state.mock.exam=x==null?state.exam:x}
+
+window.RetakePlus={minsOf,lewisData,LWPOOL,RDRAW,WX,get examDay(){return day},end};
 })();

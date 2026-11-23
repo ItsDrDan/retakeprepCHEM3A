@@ -91,3 +91,5 @@
 #edBar{margin:8px 0 10px}.ed-idle{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.ed-idle small{flex:1 1 100%;color:var(--muted)}.ed-live{display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:12px;background:#26324a;color:#fff}.ed-live[hidden],.ed-idle[hidden]{display:none}#edClock{font-size:24px;font-variant-numeric:tabular-nums}#edClock.low{color:#ffd166}body.exam-day #edBar{position:fixed;top:max(8px,env(safe-area-inset-top));left:12px;z-index:9994;margin:0}body.exam-day #bNewMock{display:none}
 @media(max-width:700px){body.exam-day #edBar{top:14px}.ed-live{padding:0 12px;height:50px;box-sizing:border-box;box-shadow:0 4px 12px #1f2a4433}.ed-live span{display:none}#edClock{font-size:22px}}
 body.exam-day .stat:has(#clock){display:none}
+/* worked examples */
+.wx{margin-top:8px;border:1.5px solid #cfd8f3;border-radius:10px;background:#f6f8ff;padding:0 12px}.wx summary{min-height:44px;display:flex;align-items:center;font-weight:800;color:#33408f;cursor:pointer}.wx ol{padding-left:22px;margin:6px 0}.wx li{margin:4px 0}.wx p{margin:6px 0}.wx-tip{font-weight:700;padding-bottom:6px}
