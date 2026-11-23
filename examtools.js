@@ -179,3 +179,114 @@ document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(!q('#xBook
 document.addEventListener('click',e=>{if(e.target.closest&&e.target.closest('.exam-card')&&!q('#xBookPanel').hidden)setTimeout(drawBook,0)});
 window.ExamTools={openBook,closeBook,openCalc,closeCalc};
 })();
+
+/* ======================= My Retake Plan + Fix My Mistakes ======================= */
+(function(){
+if(typeof G==='undefined'||typeof recordType!=='function')return;
+const el=id=>document.getElementById(id);
+const key=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const parse=s=>{const a=String(s).split('-').map(Number);return new Date(a[0],a[1]-1,a[2])};
+const validDay=s=>/^\d{4}-\d{2}-\d{2}$/.test(s||'')&&!isNaN(parse(s));
+const today=()=>key(new Date());
+const addDays=(s,n)=>{const d=parse(s);d.setDate(d.getDate()+n);return key(d)};
+const diff=(a,b)=>Math.round((parse(b)-parse(a))/864e5);
+const nice=s=>parse(s).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+const plural=(n,w)=>n+' '+w+(n===1?'':'s');
+const obj=x=>x&&typeof x==='object'&&!Array.isArray(x)?x:{};
+let P=obj(LS.get('-plan',{})),F=obj(LS.get('-fix',{})),sess=null,quiet=false,banner='';
+const save=()=>{LS.set('-plan',P);LS.set('-fix',F)};
+const planOf=ex=>{const p=obj(P[ex]);return p.date&&validDay(p.date)?p:null};
+const skillName=t=>TYPE_NAMES[t]||prettySkill(String(t).replace('bank:',''));
+const bankOf=(ex,t)=>bankPool(ex,'all').filter(b=>'bank:'+b.sk===t);
+const usable=(ex,t)=>String(t).startsWith('bank:')?bankOf(ex,t).length>0:!!G[t]&&poolFor(ex).includes(t);
+function make(t){const ex=state.exam;let q;if(t.startsWith('bank:')){q=bankToQ(pick(bankOf(ex,t)),ex)}else{q=G[t]();q.sec=secFor(ex,t);const p=EXAMS[ex].pts;if(p&&p[t])q.pts=p[t]}q.type=t;return q}
+
+/* the CHEM 1A and CHEM 3A engines differ slightly, so optional helpers fall back here */
+const hintsOf=q=>typeof hintSteps==='function'?hintSteps(q):[q.hint].filter(Boolean);
+const preOf=(ex,t)=>typeof prereqFor==='function'?prereqFor(ex,t):null;
+const fixRec=t=>{if(typeof recordFix==='function')recordFix(t)};
+const track=(q,res)=>{if(typeof trackQ==='function')return trackQ(q,res);try{window.ddTrack&&ddTrack({game:'retakeprep',course:'CHEM 3A',mode:'Plan',topic:EXAMS[state.exam].name+': '+((EXAMS[state.exam].sections.find(x=>x[0]===q.sec)||[])[1]||''),correct:res.earned>=q.pts})}catch(e){}};
+function reveal(q){if(typeof revealMC==='function')return revealMC(q);q.allParts.forEach(p=>{if(p.kind!=='mc')return;const e=el(p.id);if(e)e.querySelectorAll('label').forEach((l,i)=>{if(i===p.ans)l.classList.add('good')})})}
+function unlock(q){if(typeof unlockQ==='function')return unlockQ(q);const box=el(q.qid);box.classList.remove('ok','part','bad');q.allParts.forEach(p=>{const e=el(p.id);if(!e)return;(e.matches('input,select')?[e]:[...e.querySelectorAll('input,select')]).forEach(i=>{i.disabled=false;i.classList.remove('good','wrong')});if(p.kind==='mc')e.querySelectorAll('label').forEach(l=>{l.classList.remove('good','wrong');if(l.querySelector('input:checked'))l.classList.add('pick')});e.style.outline='';e.querySelectorAll('.obox,.d,.chk-opt').forEach(x=>x.style.pointerEvents='')})}
+
+/* ---------- Fix My Mistakes: a skill clears after a clean answer, then another clean answer on a later day ---------- */
+const fixes=ex=>Object.values(obj(F[ex])).filter(x=>x&&x.t&&validDay(x.due)&&usable(ex,x.t));
+const dueFixes=ex=>{const d=today();return fixes(ex).filter(x=>x.due<=d)};
+function addMiss(ex,t){if(!usable(ex,t))return;const m=F[ex]=obj(F[ex]),d=today(),x=m[t];m[t]={t,stage:0,due:d,at:x&&x.at||d,last:x&&x.last||'',misses:(x&&x.misses||0)+1};LS.set('-fix',F)}
+function cleanFix(ex,t){const m=obj(F[ex]),x=m[t];if(!x)return 'none';const d=today(),p=planOf(ex),lastChance=p&&p.date<=d;if((x.stage>=1&&x.last&&x.last<d)||lastChance){delete m[t];LS.set('-fix',F);return 'cleared'}x.stage=1;x.last=d;x.due=addDays(d,1);LS.set('-fix',F);return 'tomorrow'}
+function helpedFix(ex,t){const x=obj(F[ex])[t];if(!x)return;const d=today(),p=planOf(ex);x.stage=0;x.due=p&&p.date<=d?d:addDays(d,1);LS.set('-fix',F)}
+const rec0=recordType;recordType=function(t,frac,o){rec0(t,frac,o);if(!quiet&&frac<1)addMiss(state.exam,t)};
+
+/* ---------- daily plan ---------- */
+function sectionPct(ex,p){const out={};EXAMS[ex].sections.forEach(([s])=>{const ts=poolFor(ex).filter(t=>secFor(ex,t)===s).map(typePct).filter(v=>v!=null);out[s]=ts.length?ts.reduce((a,b)=>a+b,0)/ts.length:(p&&p.diag&&p.diag[s]!=null?p.diag[s]:null)});return out}
+function ranked(ex,p,avoid){const sec=sectionPct(ex,p),bp=EXAMS[ex].blueprint,rows=poolFor(ex).map(t=>{const v=typePct(t),n=(REC[t]||{}).n||0,sp=sec[secFor(ex,t)];if(v!=null&&v>=.85&&n>=3)return null;let s=(1-(v==null?.55:v))+(1-(sp==null?.55:sp));if(bp.includes(t))s+=.35;if(avoid&&avoid.has(t))s*=.55;const pre=v!=null&&v<.8?preOf(ex,t):null;return{t:pre||t,s}}).filter(Boolean).sort((a,b)=>b.s-a.s),seen=new Set();return rows.map(r=>r.t).filter(t=>!seen.has(t)&&seen.add(t))}
+const hasMock=(p,d)=>{const left=diff(d,p.date),span=diff(p.start||d,p.date);return left===1||(span>=5&&left===Math.ceil(span/2))};
+const focusCount=m=>m>=60?3:m>=30?2:1;
+function dayRec(ex,p){const d=today();p.days=obj(p.days);if(!p.days[d]){const avoid=new Set(obj(p.days[addDays(d,-1)]).skills||[]),mock=hasMock(p,d),n=mock||p.date<=d?(p.date<=d?1:0):focusCount(p.mins);p.days[d]={skills:ranked(ex,p,avoid).slice(0,n),got:{},tries:{},mock,mocks0:J.mocks||0};Object.keys(p.days).sort().slice(0,-10).forEach(k=>delete p.days[k]);save()}return p.days[d]}
+const skillDone=(r,t)=>(r.got[t]||0)>=3||(r.tries[t]||0)>=6;
+
+/* ---------- screens ---------- */
+const ICON='<svg viewBox="0 0 64 64" width="100%" height="100%" aria-hidden="true"><rect x="9" y="13" width="46" height="43" rx="9" fill="#fff" stroke="#26324a" stroke-width="4"/><path d="M9 25V22a9 9 0 0 1 9-9h28a9 9 0 0 1 9 9v3Z" fill="#2d8a7d" stroke="#26324a" stroke-width="4"/><path d="M21 8v11M43 8v11" stroke="#26324a" stroke-width="5" stroke-linecap="round"/><path d="m21 41 8 8 15-17" fill="none" stroke="#4b57d1" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function setup(ex,p){const min=today(),v=p&&p.date>=min?p.date:'',m=p&&p.mins||30;return `<h2 tabindex="-1" id="planH">My Retake Plan</h2><p class="lead">Tell me when you retake ${EXAMS[ex].name}. A short check finds what to work on, then you get a small plan for each day.</p><div class="pl-form"><label for="plDate">Retake date</label><select id="plDate"><option value="">Choose a day</option>${Array.from({length:36},(_,i)=>addDays(min,i)).map((x,i)=>`<option value="${x}" ${x===v?'selected':''}>${nice(x)}${i===0?' (today)':i===1?' (tomorrow)':''}</option>`).join('')}</select><label for="plMins">Study time each day</label><select id="plMins">${[20,30,45,60].map(x=>`<option value="${x}" ${x===m?'selected':''}>${x} minutes</option>`).join('')}</select></div><div class="pl-msg" id="plMsg" role="alert"></div><div class="row"><button class="btn primary" data-a="save">${p&&p.diag?'Save changes':'Next: quick check'}</button>${p?'<button class="btn" data-a="home">Cancel</button>':''}</div>`}
+function dash(ex,p){const d=today(),left=diff(d,p.date);if(left<0)return `<h2 tabindex="-1" id="planH">My Retake Plan</h2><p class="lead">Your ${EXAMS[ex].name} retake date (${nice(p.date)}) has passed. If you have a new date, update it here.</p><div class="row"><button class="btn primary" data-a="edit">Set a new date</button></div>`;
+ const r=dayRec(ex,p),due=dueFixes(ex),all=fixes(ex),later=all.length-due.length,mockDone=(J.mocks||0)>r.mocks0;let rows=[];
+ rows.push(`<li class="pl-task ${due.length?'':'ok'}"><span class="pl-tick" aria-hidden="true">${due.length?'':'✓'}</span><span><b>Fix My Mistakes</b><small>${due.length?plural(due.length,'skill')+' ready now':all.length?'Nothing due today. '+plural(later,'skill')+' come back on a later day':'No missed skills right now'}</small></span>${due.length?'<button class="btn primary" data-a="fix">Start</button>':''}</li>`);
+ r.skills.forEach(t=>{const ok=skillDone(r,t);rows.push(`<li class="pl-task ${ok?'ok':''}"><span class="pl-tick" aria-hidden="true">${ok?'✓':''}</span><span><b>${skillName(t)}</b><small>${ok?'Done for today':`Get 3 right (${r.got[t]||0} so far)`}</small></span>${ok?'':`<button class="btn soft" data-a="skill" data-t="${t}">Practice</button>`}</li>`)});
+ if(r.mock)rows.push(`<li class="pl-task ${mockDone?'ok':''}"><span class="pl-tick" aria-hidden="true">${mockDone?'✓':''}</span><span><b>Full Mock Exam</b><small>${mockDone?'Finished today':'Set aside time and work it on paper'}</small></span>${mockDone?'':'<button class="btn soft" data-a="mock">Start</button>'}</li>`);
+ const undone=rows.filter(x=>!x.includes('pl-task ok')).length,sec=sectionPct(ex,p),next=[];for(let i=1;i<=Math.min(left-1,4);i++){const x=addDays(d,i);next.push(`<li><b>${nice(x)}</b> ${hasMock(p,x)?'Mock exam + fixes':'Fixes + '+plural(focusCount(p.mins),'skill')}</li>`)}if(left>=1)next.push(`<li><b>${nice(p.date)}</b> Retake day</li>`);
+ return `<div class="pl-head"><div><h2 tabindex="-1" id="planH">My Retake Plan</h2><p>${EXAMS[ex].name} · ${nice(p.date)} · <b>${left===0?'Today':left===1?'1 day left':left+' days left'}</b></p></div></div>${banner?`<div class="fb ok">${banner}</div>`:''}<h3>${left===0?'Warm up for today':'Today'}</h3><ul class="pl-list">${rows.join('')}</ul>${undone?'':'<div class="fb ok"><b>You finished today’s plan.</b> Rest counts too. Your next set is ready tomorrow.</div>'}
+ <details class="ref pl-more"><summary>How ready am I?</summary><div class="body">${EXAMS[ex].sections.map(([s,n])=>{const v=sec[s];return `<div class="pl-bar"><span>${SHORT[s]||n}</span><div class="bar" role="img" aria-label="${v==null?'No data yet':Math.round(v*100)+' percent'}"><i style="width:${v==null?0:Math.round(v*100)}%;background:${v>=.8?'#5fae78':v>=.6?'#f2c35b':'#e0675a'}"></i></div><b>${v==null?'—':Math.round(v*100)+'%'}</b></div>`}).join('')}<p class="pl-note">This is a practice estimate. It does not predict your grade.</p></div></details>${next.length?`<details class="ref pl-more"><summary>What’s coming up</summary><div class="body"><ul class="pl-next">${next.join('')}</ul></div></details>`:''}
+ <div class="row"><button class="btn" data-a="edit">Change date or time</button><button class="btn" data-a="recheck">Retake quick check</button></div>`}
+function intro(ex,p){const g=obj(p.prog),n=(g.types||diagTypes(ex)).length,i=g.i||0;return `<h2 tabindex="-1" id="planH">Quick check</h2><p class="lead">${plural(n,'question')} from across ${EXAMS[ex].name}. Use the Book and calculator, but no hints. If you have not learned something yet, tap <b>Not sure yet</b>. That helps your plan more than guessing.</p><div class="row"><button class="btn primary" data-a="diag">${i?`Continue (question ${i+1})`:'Start quick check'}</button><button class="btn" data-a="edit">Change date</button></div>`}
+function render(){const ex=state.exam,b=el('planBody');if(sess&&sess.ex!==ex)sess=null;if(sess){if(!sess.q||!el(sess.q.qid))loadQ();return}const p=planOf(ex);b.innerHTML=!p||render.edit?setup(ex,p):!p.diag?intro(ex,p):dash(ex,p);banner=''}
+function top(){const a=el('plan');if(!a)return;const y=a.getBoundingClientRect().top+scrollY-8;try{scrollTo({top:Math.max(0,y),behavior:'auto'})}catch(e){scrollTo(0,y)}}
+function diagTypes(ex){const X=EXAMS[ex],out=[],left=[];X.sections.forEach(([s])=>{const ts=shuf(X.blueprint.filter(t=>secFor(ex,t)===s));out.push(...ts.slice(0,2));left.push(...ts.slice(2))});shuf(left).slice(0,Math.max(0,10-out.length)).forEach(t=>out.push(t));const order=X.blueprint;return out.sort((a,c)=>order.indexOf(a)-order.indexOf(c))}
+
+/* ---------- one-question-at-a-time runner ---------- */
+function title(s){if(s.kind==='diag')return `Quick check · ${s.i+1} of ${s.types.length}`;if(s.kind==='fix')return `Fix My Mistakes · ${s.seen.size} of ${s.total}`;return `${skillName(s.t)} · ${s.day.got[s.t]||0} of 3 right`}
+function nextType(s){if(s.kind==='diag')return s.types[s.i];if(s.kind==='skill')return s.t;const x=dueFixes(s.ex).find(v=>!s.seen.has(v.t));return x&&x.t}
+function loadQ(){const s=sess,t=nextType(s);if(!t)return finish();if(s.kind==='fix')s.seen.add(t);const q=make(t);Object.assign(s,{q,att:1,help:false,hint:0,st:'ask',recorded:false});el('planBody').innerHTML=`<div class="pl-run"><b tabindex="-1" id="planH">${title(s)}</b><button class="btn" data-a="back">My plan</button></div>${s.kind==='fix'?'<p class="pl-note">Try this one on your own first. Hints open after your first try.</p>':''}<div id="pQ">${renderQ(q,'',`pq${++uid}`)}</div><div class="row" id="pBtns"></div>`;wireInteractive(q);buttons();top()}
+function buttons(){const s=sess,B=[];const b=(a,t,c='')=>B.push(`<button class="btn ${c}" data-a="${a}">${t}</button>`),hintsOK=s.kind==='skill'||(s.kind==='fix'&&s.att>1),more=hintsOf(s.q).length>s.hint;
+ if(s.st==='ask'){if(hintsOK&&more)b('hint',s.hint?'Next hint':'Hint','warm');b('check','Check answer','primary');if(s.kind==='diag')b('unsure','Not sure yet');else if(hintsOK)b('sol','Show solution','soft')}
+ else if(s.st==='wrong'){b('retry','Try again','primary');if(more)b('hint',s.hint?'Next hint':'Hint','warm');b('sol','Show solution','soft')}
+ else b('next','Next','good');el('pBtns').innerHTML=B.join('')}
+function box(cls,html){const w=el(sess.q.qid).querySelector('.fbwrap');w.querySelectorAll('.pl-fb').forEach(x=>x.remove());w.insertAdjacentHTML('beforeend',`<div class="fb ${cls} pl-fb">${html}</div>`)}
+const msgList=m=>m.length?'<ul style="margin:6px 0 0;padding-left:20px">'+m.map(x=>`<li>${x}</li>`).join('')+'</ul>':'';
+const solBox=q=>`<details class="ref" style="margin-top:8px" open><summary>Step-by-step solution</summary><div class="body sol" style="border:0;color:var(--ink)">${q.sol}</div></details>`;
+function lock(q){el(q.qid).querySelectorAll('input,select').forEach(i=>i.disabled=true);el(q.qid).querySelectorAll('.obox,.d,.chk-opt').forEach(x=>x.style.pointerEvents='none')}
+function count(s,frac){if(s.recorded)return;s.recorded=true;quiet=s.kind==='fix';recordType(s.q.type,frac,{help:s.help});quiet=false}
+function check(){const s=sess,q=s.q;if(!q.allParts.some(answered)){toast('Type or choose an answer first');return}const first=s.att===1,res=gradeQ(q,{reveal:false}),full=res.earned>=q.pts,frac=res.earned/q.pts;if(first){count(s,frac);track(q,res)}
+ if(s.kind==='diag'){s.scores[q.type]=frac;saveProg(s);s.st='done';box(full?'ok':res.earned?'part':'bad',`<b>${full?'✓ Correct':res.earned?`Partial credit: ${res.earned} / ${q.pts}`:'Not this time'}</b>${msgList(res.msgs)}${full?'':solBox(q)}`);setMood(full?'correct':'thinking',1800)}
+ else if(s.kind==='fix'){if(full&&first){const r=cleanFix(s.ex,q.type);if(r==='cleared')s.cleared++;addXP(r==='cleared'?20:8);s.st='done';box('ok',`<b>${r==='cleared'?'✓ Skill cleared!':'✓ Correct on your own.'}</b> ${r==='cleared'?'You got it right again on a later day.':'It comes back tomorrow to make sure it sticks.'}${q.why?`<div style="margin-top:4px">${q.why}</div>`:''}`);setMood('correct',1800)}else if(full){helpedFix(s.ex,q.type);fixRec(q.type);J.fixes=(J.fixes||0)+1;addXP(4);s.st='done';box('ok','<b>✓ You fixed it.</b> It comes back tomorrow so you can get it on the first try.');setMood('correct',1800)}else{s.st='wrong';box(res.earned?'part':'bad',`<b>${res.earned?`Partial credit: ${res.earned} / ${q.pts}`:'Not yet'}</b>${msgList(res.msgs)}<div style="margin-top:6px">Find the slip and try again, or open a hint.</div>`);setMood('thinking',1800)}}
+ else{s.day.tries[q.type]=(s.day.tries[q.type]||0)+(first?1:0);if(full&&first&&!s.help)s.day.got[q.type]=(s.day.got[q.type]||0)+1;save();if(full){s.st='done';box('ok',`<b>✓ Correct${first?'':' on another try'}.</b>${s.help&&first?' A hint helped, so try the next one without it.':''}${q.why?`<div style="margin-top:4px">${q.why}</div>`:''}`);if(first&&!s.help)addXP(6);setMood('correct',1800)}else{s.st='wrong';box(res.earned?'part':'bad',`<b>${res.earned?`Partial credit: ${res.earned} / ${q.pts}`:'Not yet'}</b>${msgList(res.msgs)}`);setMood('thinking',1800)}}
+ checkBadges();buttons()}
+function saveProg(s){const p=planOf(s.ex);p.prog={types:s.types,i:s.i+(s.st==='x'?1:0),scores:s.scores};save()}
+function finish(){const s=sess,ex=s.ex,p=planOf(ex);sess=null;if(s.kind==='diag'){const d={};EXAMS[ex].sections.forEach(([x])=>{const ts=s.types.filter(t=>secFor(ex,t)===x);d[x]=ts.length?ts.reduce((a,t)=>a+(s.scores[t]||0),0)/ts.length:null});p.diag=d;p.start=p.start||today();delete p.prog;if(p.days)delete p.days[today()];save();banner='<b>Your plan is ready.</b> Start with the first item below.';setMood('victory',2200)}else if(s.kind==='fix'){banner=s.cleared?`<b>${plural(s.cleared,'skill')} cleared.</b> Nice work.`:'<b>Fix list done for now.</b>'}else if(skillDone(s.day,s.t))banner=`<b>${skillName(s.t)} is done for today.</b>`;render();top()}
+function start(kind,t){const ex=state.exam,p=planOf(ex);if(kind==='diag'){const g=obj(p.prog);sess={kind,ex,types:g.types&&g.types.every(x=>usable(ex,x))?g.types:diagTypes(ex),i:g.i||0,scores:obj(g.scores)};if(sess.i>=sess.types.length)sess.i=0}else if(kind==='fix')sess={kind,ex,seen:new Set(),total:dueFixes(ex).length,cleared:0};else sess={kind,ex,t,day:dayRec(ex,p)};loadQ()}
+function act(a,btn){const s=sess,ex=state.exam;
+ if(a==='save'){const v=el('plDate').value,m=+el('plMins').value;if(!validDay(v)||v<today()){el('plMsg').textContent='Choose a retake date of today or later.';el('plDate').focus();return}const o=planOf(ex)||{};P[ex]=Object.assign(o,{date:v,mins:m});if(!o.start||o.date<o.start)P[ex].start=today();if(P[ex].days)delete P[ex].days[today()];save();render.edit=false;render();top()}
+ else if(a==='edit'){render.edit=true;render();top()}else if(a==='home'){render.edit=false;render();top()}
+ else if(a==='diag')start('diag');else if(a==='fix')start('fix');else if(a==='skill')start('skill',btn.dataset.t);
+ else if(a==='recheck'){const p=planOf(ex);delete p.diag;delete p.prog;if(p.days)delete p.days[today()];save();render();top()}
+ else if(a==='mock'){state.mode='mock';saveUI();buildModes();show();window.scrollTo({top:el('mock').getBoundingClientRect().top+scrollY-8})}
+ else if(a==='back'){if(s&&s.kind==='diag'){if(s.st==='done')s.i++;saveProg(s)}sess=null;render();top()}
+ else if(!s)return;
+ else if(a==='check')check();
+ else if(a==='hint'){const h=hintsOf(s.q),k=s.hint;if(k>=h.length)return;s.help=true;s.hint=k+1;el(s.q.qid).querySelector('.fbwrap').insertAdjacentHTML('afterbegin','');const w=el(s.q.qid).querySelector('.fbwrap'),old=w.querySelectorAll('.fb.hint');const html=`<div class="fb hint">💡 <b>Hint ${k+1} of ${h.length}:</b> ${h[k]}</div>`;if(old.length)old[old.length-1].insertAdjacentHTML('afterend',html);else w.insertAdjacentHTML('afterbegin',html);setMood('thinking');buttons()}
+ else if(a==='retry'){unlock(s.q);s.att++;s.st='ask';buttons();const f=el(s.q.qid).querySelector('input:not([type=radio]):not([type=checkbox]),select');if(f&&!matchMedia('(pointer: coarse)').matches)f.focus({preventScroll:true})}
+ else if(a==='sol'){s.help=true;if(s.kind==='skill'){if(!s.recorded){count(s,0);track(s.q,{earned:0});s.day.tries[s.q.type]=(s.day.tries[s.q.type]||0)+1;save()}}else if(s.kind==='fix')helpedFix(s.ex,s.q.type);lock(s.q);reveal(s.q);s.st='done';box('part',`<b>Solution shown.</b>${s.kind==='fix'?' This skill comes back tomorrow.':''}${solBox(s.q)}`);buttons()}
+ else if(a==='unsure'){count(s,0);s.q.allParts.forEach(p=>p.result={score:0});s.scores[s.q.type]=0;saveProg(s);lock(s.q);reveal(s.q);s.st='done';box('part',`<b>That’s useful to know.</b> It’s now on your fix list.${solBox(s.q)}`);buttons()}
+ else if(a==='next'){if(s.kind==='diag'){s.i++;saveProg(s);if(s.i>=s.types.length)return finish();loadQ()}else if(s.kind==='skill'&&skillDone(s.day,s.t))finish();else loadQ()}}
+
+/* ---------- connect to the game ---------- */
+const sec=document.createElement('section');sec.className='card hidden';sec.id='plan';sec.innerHTML='<div id="planBody"></div>';el('train').before(sec);
+sec.addEventListener('click',e=>{const b=e.target.closest&&e.target.closest('button[data-a]');if(b&&sec.contains(b))act(b.dataset.a,b)});
+MODES.unshift({id:'plan',ic:ICON,t:'My Retake Plan',d:'A daily plan plus your fix-it list'});MODE_ART.plan='mode-train';
+const build0=buildModes;buildModes=function(){build0();const c=document.querySelector('.mode[data-m="plan"] .ic');if(c)c.innerHTML=`<span class="pl-ic">${ICON}</span>`};
+const show0=show;show=function(){const on=state.mode==='plan';sec.classList.toggle('hidden',!on);if(on){['train','mock','weak'].forEach(id=>el(id).classList.add('hidden'));render.edit=false;render()}else show0()};
+const grade0=el('bGrade').onclick;el('bGrade').onclick=function(){grade0.call(this);const M=state.mock;if(!M||!M.graded||M.fixBtn)return;M.fixBtn=true;const n=dueFixes(state.exam).length,c=el('result').querySelector('.card');if(!n||!c)return;c.insertAdjacentHTML('afterbegin',`<div class="fb hint" style="margin:0 0 12px"><b>${plural(n,'skill')} on your fix list.</b> Rework them with new numbers while this exam is fresh.<div class="row" style="margin-top:8px"><button class="btn primary" id="plFixGo">Fix My Mistakes</button></div></div>`);el('plFixGo').onclick=()=>{state.mode='plan';saveUI();buildModes();show();if(planOf(state.exam)&&obj(planOf(state.exam)).diag)start('fix');else{P[state.exam]=P[state.exam]||{};sess=null;startFixNoPlan()}}};
+function startFixNoPlan(){sess={kind:'fix',ex:state.exam,seen:new Set(),total:dueFixes(state.exam).length,cleared:0};loadQ()}
+const reset0=el('bReset').onclick;el('bReset').onclick=function(){const before=J;reset0.call(this);if(J!==before){P={};F={};sess=null;save();show()}};
+if(ui.mode==='plan')state.mode='plan';buildModes();show();
+window.RetakePlan={render,dueFixes,fixes,planOf,cleanFix,get session(){return sess}};
+})();
